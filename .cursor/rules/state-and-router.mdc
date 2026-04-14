@@ -1,0 +1,119 @@
+---
+description: DataPay Admin 状态管理（Pinia）与路由规范
+globs: datapay-admin/src/{stores,router}/**/*.js
+alwaysApply: false
+---
+
+# 状态管理与路由规范
+
+## Pinia Store 规范
+
+统一使用 **Setup Store**（函数式写法），不使用 Options Store。
+
+```js
+// src/stores/example.js
+import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+
+export const useExampleStore = defineStore('example', () => {
+  const data = ref([])
+  const loading = ref(false)
+
+  const total = computed(() => data.value.length)
+
+  async function fetchData() {
+    loading.value = true
+    try {
+      // await api.getData()
+    } finally {
+      loading.value = false
+    }
+  }
+
+  return { data, loading, total, fetchData }
+})
+```
+
+## 用户认证（user store）
+
+- Token 键名：`dp_token`（localStorage）
+- 用户信息键名：`dp_userInfo`（localStorage，JSON 序列化）
+- 通过 `useUserStore()` 获取 `token`、`userInfo`、`login()`、`logout()`
+
+接入真实后端时，`login()` 应替换为 axios 请求，并在响应中读取 `token`：
+
+```js
+async function login(username, password) {
+  const res = await request.post('/api/auth/login', { username, password })
+  token.value = res.data.token
+  userInfo.value = res.data.user
+  localStorage.setItem('dp_token', res.data.token)
+  localStorage.setItem('dp_userInfo', JSON.stringify(res.data.user))
+}
+```
+
+## 路由规范
+
+### 添加新路由
+
+在 `src/router/index.js` 的根路由子数组中追加，同时在 `AdminLayout.vue` 侧边栏菜单中添加对应 `el-menu-item`：
+
+```js
+{
+  path: 'new-module',
+  name: 'NewModule',
+  component: () => import('@/views/new-module/index.vue'),
+  meta: { title: '模块名称', icon: 'IconName' }
+}
+```
+
+### 路由 meta 字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `title` | string | 页面标题（用于 document.title 和面包屑） |
+| `icon` | string | Element Plus 图标组件名 |
+| `requiresAuth` | boolean | 默认 `true`，登录页设为 `false` |
+
+### 导航守卫逻辑
+
+- 未登录访问需鉴权页面 → 重定向到 `/login`
+- 已登录访问 `/login` → 重定向到 `/`
+- `document.title` 自动设置为 `{meta.title} - DataPay 管理系统`
+
+## API 请求封装（待接入后端）
+
+建议创建 `src/utils/request.js` 统一封装 axios：
+
+```js
+import axios from 'axios'
+import { useUserStore } from '@/stores/user'
+
+const request = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  timeout: 10000
+})
+
+// 请求拦截：自动携带 Token
+request.interceptors.request.use(config => {
+  const userStore = useUserStore()
+  if (userStore.token) {
+    config.headers.Authorization = `Bearer ${userStore.token}`
+  }
+  return config
+})
+
+// 响应拦截：统一错误处理
+request.interceptors.response.use(
+  res => res.data,
+  err => {
+    if (err.response?.status === 401) {
+      useUserStore().logout()
+      window.location.href = '/login'
+    }
+    return Promise.reject(err)
+  }
+)
+
+export default request
+```

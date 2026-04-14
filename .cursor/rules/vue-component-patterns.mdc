@@ -1,0 +1,90 @@
+---
+description: DataPay Admin Vue 3 组件编写规范
+globs: datapay-admin/src/**/*.vue
+alwaysApply: false
+---
+
+# Vue 3 组件规范
+
+## 组件结构顺序
+
+始终按 `<template>` → `<script setup>` → `<style lang="scss" scoped>` 排列。
+
+## script setup 规范
+
+- 统一使用 `<script setup>` Composition API，不使用 Options API
+- import 顺序：Vue 核心 → vue-router / pinia → 第三方库 → 本地模块
+
+```vue
+<script setup>
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { useUserStore } from '@/stores/user'
+import { ElMessage, ElMessageBox } from 'element-plus'
+</script>
+```
+
+## 响应式数据
+
+- 基本类型用 `ref()`，对象/表单数据用 `reactive()`
+- 派生数据用 `computed()`
+
+```js
+// ✅ 正确
+const loading = ref(false)
+const form = reactive({ username: '', password: '' })
+const isAdmin = computed(() => userStore.userInfo?.role === 'admin')
+
+// ❌ 避免对对象使用 ref（除非需要整体替换）
+const form = ref({ username: '' })
+```
+
+## 异步操作模板
+
+```js
+async function fetchData() {
+  loading.value = true
+  try {
+    const res = await api.getList(params)
+    list.value = res.data
+  } catch (e) {
+    ElMessage.error(e.message || '加载失败')
+  } finally {
+    loading.value = false
+  }
+}
+```
+
+## ECharts 使用规范
+
+- 用 `ref` 获取容器，在 `onMounted` 内延迟 300ms 初始化（等待 DOM 渲染）
+- 在 `onUnmounted` 中销毁实例并移除 resize 监听
+
+```js
+const chartRef = ref()
+let chart = null
+
+onMounted(() => {
+  setTimeout(() => {
+    chart = echarts.init(chartRef.value)
+    window.addEventListener('resize', () => chart?.resize())
+  }, 300)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', () => chart?.resize())
+  chart?.dispose()
+})
+```
+
+## 路径别名
+
+始终使用 `@` 代替相对路径引用 `src` 下的模块：
+
+```js
+// ✅ 正确
+import { useUserStore } from '@/stores/user'
+
+// ❌ 避免
+import { useUserStore } from '../../stores/user'
+```

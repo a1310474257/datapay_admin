@@ -1,0 +1,116 @@
+---
+description: DataPay Admin UI 设计规范与 Element Plus 使用约定
+globs: datapay-admin/src/**/*.{vue,scss}
+alwaysApply: false
+---
+
+# UI 设计规范
+
+## 品牌色彩系统
+
+| 用途 | 颜色值 |
+|------|--------|
+| 主色（品牌紫） | `#6366f1` |
+| 主色深 | `#4f46e5` |
+| 主色浅 | `#a5b4fc` |
+| 辅色紫 | `#8b5cf6`、`#a855f7` |
+| 成功绿 | `#10b981` |
+| 警告橙 | `#f59e0b` |
+| 危险红 | `#ef4444` |
+| 侧边栏背景 | `#1e1e2d` |
+| 页面背景 | `#f4f6fb` |
+| 顶栏/卡片背景 | `#fff` |
+
+## 渐变色使用
+
+主色渐变统一用 `linear-gradient(135deg, #6366f1, #8b5cf6)`，用于按钮、图标背景、横幅等。
+
+## Element Plus 组件使用规范
+
+### 卡片
+```vue
+<!-- 页面内容卡片：shadow="never"，依赖全局 CSS 圆角 14px -->
+<el-card shadow="never">
+  <template #header>
+    <div class="card-header">
+      <span class="card-title">标题</span>
+      <!-- 右侧操作区 -->
+    </div>
+  </template>
+</el-card>
+```
+
+### 表格
+```vue
+<el-table :data="list" stripe style="width:100%">
+  <el-table-column prop="field" label="列名" />
+  <!-- 自定义渲染用 #default="{ row }" -->
+  <el-table-column label="状态">
+    <template #default="{ row }">
+      <el-tag :type="tagTypeMap[row.status]" size="small" round>
+        {{ row.status }}
+      </el-tag>
+    </template>
+  </el-table-column>
+</el-table>
+```
+
+### 消息反馈
+```js
+// 成功操作
+ElMessage.success('操作成功')
+
+// 危险操作需要二次确认
+await ElMessageBox.confirm('确定要删除吗？', '提示', {
+  confirmButtonText: '确定',
+  cancelButtonText: '取消',
+  type: 'warning'
+})
+```
+
+### 表单验证
+```js
+const rules = {
+  field: [
+    { required: true, message: '请输入XXX', trigger: 'blur' },
+    { min: 2, max: 20, message: '长度 2-20 位', trigger: 'blur' }
+  ]
+}
+// 提交时调用
+await formRef.value.validate(async (valid) => {
+  if (!valid) return
+  // ...提交逻辑
+})
+```
+
+## SCSS 样式规范
+
+- 组件样式必须加 `scoped`，全局覆盖 Element Plus 使用 `:deep()`
+- 全局样式统一在 `src/assets/styles/index.scss` 中定义
+- 动画时长：交互反馈 `0.2s`，页面切换 `0.2s`，侧边栏折叠 `0.25s`
+
+```scss
+// ✅ 覆盖子组件样式
+.my-component :deep(.el-input__wrapper) {
+  border-radius: 10px;
+}
+
+// ✅ 悬停交互
+.card-item {
+  transition: transform 0.2s, box-shadow 0.2s;
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+  }
+}
+```
+
+## 响应式布局
+
+使用 Element Plus 的 `el-row` + `el-col` 栅格，断点参考：
+
+```vue
+<el-col :xs="24" :sm="12" :lg="6">  <!-- 统计卡片：大屏4列 -->
+<el-col :lg="16" :md="24">          <!-- 图表主区：大屏占2/3 -->
+<el-col :lg="8" :md="24">           <!-- 图表副区：大屏占1/3 -->
+```
