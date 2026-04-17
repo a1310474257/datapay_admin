@@ -1,62 +1,34 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { useUserStore } from '@/stores/user'
 
-const routes = [
+// 常驻路由：
+// - 不依赖权限，系统启动时即注册；
+// - 主要包含登录页和错误页；
+// - 业务路由由权限模块在登录后动态注入。
+export const constantRoutes = [
   {
     path: '/login',
     name: 'Login',
     component: () => import('@/views/login/index.vue'),
-    meta: { title: '登录', requiresAuth: false }
+    meta: { title: '登录', public: true },
   },
   {
-    path: '/',
-    component: () => import('@/layouts/AdminLayout.vue'),
-    meta: { requiresAuth: true },
-    redirect: '/dashboard',
-    children: [
-      {
-        path: 'dashboard',
-        name: 'Dashboard',
-        component: () => import('@/views/dashboard/index.vue'),
-        meta: { title: '工作台', icon: 'Odometer' }
-      },
-      {
-        path: 'users',
-        name: 'Users',
-        component: () => import('@/views/dashboard/index.vue'),
-        meta: { title: '用户列表', icon: 'User' }
-      },
-      {
-        path: 'transactions',
-        name: 'Transactions',
-        component: () => import('@/views/dashboard/index.vue'),
-        meta: { title: '交易记录', icon: 'CreditCard' }
-      }
-    ]
+    path: '/404',
+    name: 'NotFound',
+    component: () => import('@/views/error/404.vue'),
+    meta: { title: '404', public: true },
   },
   {
     path: '/:pathMatch(.*)*',
-    redirect: '/'
-  }
+    name: 'AnyNotFound',
+    component: () => import('@/views/error/404.vue'),
+    meta: { title: '404', public: true },
+  },
 ]
 
+// 采用 HTML5 History 模式，路径更简洁（无 #）。
 const router = createRouter({
   history: createWebHistory(),
-  routes
-})
-
-router.beforeEach((to, from, next) => {
-  const userStore = useUserStore()
-  document.title = to.meta.title
-    ? `${to.meta.title} - DataPay 管理系统`
-    : 'DataPay 管理系统'
-  if (to.meta.requiresAuth !== false && !userStore.token) {
-    next('/login')
-  } else if (to.path === '/login' && userStore.token) {
-    next('/')
-  } else {
-    next()
-  }
+  routes: constantRoutes,
 })
 
 export default router

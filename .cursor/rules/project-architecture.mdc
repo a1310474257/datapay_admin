@@ -59,3 +59,6 @@ datapay-admin/src/
 - **财务管理**：交易记录（/transactions）、账单管理（/bills）、提现申请（/withdraw）
 - **数据报表**：日报（/reports/daily）、月报（/reports/monthly）
 - **系统设置**：/settings
+
+## 其他要求
+-生成的代码要加上详细的中文注释

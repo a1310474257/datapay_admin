@@ -1,0 +1,11 @@
+:root {
+  --el-color-primary: #409eff;
+}
+
+.el-card {
+  border-radius: 12px;
+}
+
+.el-table .el-table__row:hover > td {
+  background: #f5faff;
+}

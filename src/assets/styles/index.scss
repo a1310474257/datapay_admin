@@ -1,60 +1,21 @@
+@use './variables.scss';
+@use './element-overrides.scss';
+@use './transitions.scss';
+
 * {
-  margin: 0;
-  padding: 0;
   box-sizing: border-box;
 }
 
-html, body {
-  height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  -webkit-font-smoothing: antialiased;
-}
-
+html,
+body,
 #app {
   height: 100%;
 }
 
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 10px;
-
-  &:hover {
-    background: #9ca3af;
-  }
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-// Element Plus 全局覆盖
-.el-card {
-  border-radius: 14px !important;
-  border-color: #f0f0f5 !important;
-}
-
-.el-button--primary {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
-  border: none !important;
-}
-
-.el-table {
-  --el-table-border-color: #f3f4f6;
-  --el-table-row-hover-bg-color: #fafbff;
-  font-size: 13px;
-}
-
-.el-table th.el-table__cell {
-  background: #f9fafb !important;
-  color: #6b7280 !important;
-  font-weight: 600 !important;
-}
-
-.el-breadcrumb__inner {
-  font-size: 13px !important;
+body {
+  margin: 0;
+  font-size: variables.$font-size-base;
+  color: #1f2937;
+  background: #f5f7fa;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
