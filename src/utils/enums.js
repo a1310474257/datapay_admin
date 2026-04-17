@@ -35,6 +35,15 @@ export const ORDER_TYPE = {
   5: { label: '商品' },
 }
 
+// 分类业务类型：用于运营分类管理中的“业务归属”展示与筛选。
+export const CATEGORY_BUSINESS_TYPE = {
+  1: { label: '课程', type: 'success' },
+  2: { label: 'HR工具', type: 'warning' },
+  3: { label: '调研报告', type: 'primary' },
+  4: { label: '活动', type: 'danger' },
+  5: { label: '商品', type: '' },
+}
+
 export const ORDER_STATUS = {
   0: { label: '待付款', type: 'warning' },
   1: { label: '已付款', type: 'primary' },

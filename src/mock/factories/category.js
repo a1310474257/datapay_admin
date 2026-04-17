@@ -8,6 +8,8 @@ export function seedCategory(db) {
       id: i + 1,
       name,
       icon: pic(`category-${i + 1}`),
+      // 按序轮转业务类型，保证筛选条件能覆盖 1~5。
+      business_type: (i % 5) + 1,
       sort: i + 1,
       status: 1,
       created_at: dt(),
