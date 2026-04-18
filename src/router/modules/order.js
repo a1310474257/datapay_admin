@@ -7,6 +7,12 @@ const orderRoutes = [
     meta: { title: '订单列表', icon: 'List', permission: 'OrderList' },
   },
   {
+    path: 'order/detail/:id',
+    name: 'OrderDetail',
+    component: () => import('@/views/order/detail/index.vue'),
+    meta: { title: '订单详情', keepAlive: false },
+  },
+  {
     path: 'order/refund',
     name: 'OrderRefund',
     component: () => import('@/views/order/refund/index.vue'),

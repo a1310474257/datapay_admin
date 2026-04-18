@@ -83,12 +83,19 @@ export async function getMyProfile() {
     username: admin.username,
     nickname: admin.nickname,
     avatar: '',
+    role: '超级管理员',
     // 权限码与路由 meta.permission 对齐，控制动态路由注入范围。
+    // 同时补齐第3批按钮级权限码，供 v-permission 直接消费。
     permissions: [
       'Dashboard', 'Operation', 'OperationCategory', 'OperationBanner', 'OperationNotice', 'OperationHotSearch',
       'User', 'UserList', 'Course', 'CourseTeacher', 'CourseList', 'CourseProgress', 'Resource', 'ResourceList',
       'Activity', 'ActivityList', 'ActivityRegister', 'Product', 'ProductList', 'Order', 'OrderList',
       'OrderRefund', 'OrderPayRecord', 'System', 'SystemProfile', 'SystemAdmin', 'SystemRole', 'SystemLog',
+      'category:create', 'category:update', 'category:delete',
+      'user:ban', 'user:unban', 'user:detail',
+      'teacher:create', 'teacher:update', 'teacher:delete',
+      'course:create', 'course:update', 'course:delete', 'course:publish',
+      'order:cancel', 'order:remark', 'order:ship',
     ],
   }
 }

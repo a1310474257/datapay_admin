@@ -5,17 +5,27 @@
     <div class="main-wrapper">
       <Navbar />
       <div class="content-wrapper">
-        <!-- 子路由内容渲染出口 -->
-        <router-view />
+        <!-- 列表页默认缓存，详情页通过 meta.keepAlive=false 排除缓存。 -->
+        <router-view v-slot="{ Component, route }">
+          <keep-alive :include="cachedViews">
+            <component :is="Component" v-if="route.meta?.keepAlive !== false" :key="route.fullPath" />
+          </keep-alive>
+          <component :is="Component" v-if="route.meta?.keepAlive === false" :key="route.fullPath" />
+        </router-view>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { useTagsViewStore } from '@/stores/tagsView'
 // 左侧导航与顶部导航拆分成独立组件，便于后续单独维护和复用。
 import Sidebar from './components/Sidebar.vue'
 import Navbar from './components/Navbar.vue'
+
+const tagsViewStore = useTagsViewStore()
+const cachedViews = computed(() => tagsViewStore.cachedViews)
 </script>
 
 <style lang="scss" scoped>

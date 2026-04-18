@@ -21,37 +21,49 @@
     >
       <el-table-column v-if="selectable" type="selection" width="48" />
 
-      <el-table-column
-        v-for="column in columns"
-        :key="`col-${column.prop || column.slot}`"
-        :prop="column.prop"
-        :label="column.label"
-        :width="column.width"
-        :min-width="column.minWidth"
-        :align="column.align || 'left'"
-        :fixed="column.fixed"
-        :sortable="column.sortable ? 'custom' : false"
-      >
-        <template #default="scope">
-          <slot
-            v-if="column.slot"
-            :name="column.slot"
-            :row="scope.row"
-            :$index="scope.$index"
-          />
-          <StatusTag
-            v-else-if="column.dict"
-            :dict="column.dict"
-            :value="scope.row[column.prop]"
-          />
-          <span v-else-if="column.formatter">
-            {{ column.formatter(scope.row, column, scope.row[column.prop]) }}
-          </span>
-          <span v-else>
-            {{ scope.row[column.prop] ?? '—' }}
-          </span>
-        </template>
-      </el-table-column>
+      <template v-for="column in columns" :key="`col-${column.prop || column.slot || column.type}`">
+        <el-table-column
+          v-if="column.type === 'expand'"
+          type="expand"
+          :width="column.width || 54"
+          :fixed="column.fixed"
+        >
+          <template #default="scope">
+            <slot :name="column.slot" :row="scope.row" :$index="scope.$index" />
+          </template>
+        </el-table-column>
+
+        <el-table-column
+          v-else
+          :prop="column.prop"
+          :label="column.label"
+          :width="column.width"
+          :min-width="column.minWidth"
+          :align="column.align || 'left'"
+          :fixed="column.fixed"
+          :sortable="column.sortable ? 'custom' : false"
+        >
+          <template #default="scope">
+            <slot
+              v-if="column.slot"
+              :name="column.slot"
+              :row="scope.row"
+              :$index="scope.$index"
+            />
+            <StatusTag
+              v-else-if="column.dict"
+              :dict="column.dict"
+              :value="scope.row[column.prop]"
+            />
+            <span v-else-if="column.formatter">
+              {{ column.formatter(scope.row, column, scope.row[column.prop]) }}
+            </span>
+            <span v-else>
+              {{ scope.row[column.prop] ?? '—' }}
+            </span>
+          </template>
+        </el-table-column>
+      </template>
     </el-table>
 
     <div class="pagination-wrapper">

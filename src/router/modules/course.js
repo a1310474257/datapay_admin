@@ -13,6 +13,12 @@ const courseRoutes = [
     meta: { title: '课程列表', icon: 'Tickets', permission: 'CourseList' },
   },
   {
+    path: 'course/detail/:id',
+    name: 'CourseDetail',
+    component: () => import('@/views/course/detail/index.vue'),
+    meta: { title: '课程详情', keepAlive: false },
+  },
+  {
     path: 'course/progress',
     name: 'CourseProgress',
     component: () => import('@/views/course/progress/index.vue'),

@@ -6,7 +6,7 @@
     :multiple="multiple"
     :placeholder="placeholder"
     clearable
-    @update:model-value="(value) => emit('update:modelValue', value)"
+    @update:model-value="handleUpdate"
   >
     <el-option
       v-for="item in options"
@@ -47,7 +47,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'change'])
 const dictStore = useDictStore()
 
 // 将组件层 dictKey 映射到 store 中的具体字段名，避免把 store 结构泄漏到外部。
@@ -69,4 +69,9 @@ const options = computed(() => dictStore[storeKeyMap[props.dictKey]] || [])
 onMounted(() => {
   loadMap[props.dictKey]?.()
 })
+
+function handleUpdate(value) {
+  emit('update:modelValue', value)
+  emit('change', value)
+}
 </script>

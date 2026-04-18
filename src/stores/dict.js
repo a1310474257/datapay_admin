@@ -29,8 +29,8 @@ export const useDictStore = defineStore('dict', () => {
   }
 
   // 加载分类字典：优先缓存，缺失时从 mock db 中提取。
-  async function loadCategory() {
-    const cached = fromCache(cache.value, 'category')
+  async function loadCategory(options = {}) {
+    const cached = options.force ? null : fromCache(cache.value, 'category')
     if (cached) {
       category.value = cached
       return cached
@@ -43,8 +43,8 @@ export const useDictStore = defineStore('dict', () => {
   }
 
   // 加载讲师字典：优先缓存，缺失时从 mock db 中提取。
-  async function loadTeacher() {
-    const cached = fromCache(cache.value, 'teacher')
+  async function loadTeacher(options = {}) {
+    const cached = options.force ? null : fromCache(cache.value, 'teacher')
     if (cached) {
       teacher.value = cached
       return cached
@@ -57,8 +57,8 @@ export const useDictStore = defineStore('dict', () => {
   }
 
   // 加载快递公司字典：当前为内置静态枚举。
-  async function loadExpress() {
-    const cached = fromCache(cache.value, 'expressCompany')
+  async function loadExpress(options = {}) {
+    const cached = options.force ? null : fromCache(cache.value, 'expressCompany')
     if (cached) {
       expressCompany.value = cached
       return cached

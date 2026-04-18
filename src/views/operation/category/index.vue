@@ -14,7 +14,7 @@
       :default-sort="{ prop: 'sort', order: 'ascending' }"
     >
       <template #toolbar-left>
-        <el-button type="primary" @click="openCreateDialog">新建分类</el-button>
+        <el-button v-permission="'category:create'" type="primary" @click="openCreateDialog">新建分类</el-button>
       </template>
 
       <template #icon="{ row }">
@@ -28,8 +28,8 @@
 
       <template #actions="{ row }">
         <el-space>
-          <el-button link type="primary" @click="openEditDialog(row)">编辑</el-button>
-          <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
+          <el-button v-permission="'category:update'" link type="primary" @click="openEditDialog(row)">编辑</el-button>
+          <el-button v-permission="'category:delete'" link type="danger" @click="handleDelete(row)">删除</el-button>
         </el-space>
       </template>
     </ProTable>

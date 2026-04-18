@@ -38,15 +38,19 @@ export const useTagsViewStore = defineStore('tagsView', () => {
       })
       sync()
     }
-    // 仅缓存具名路由，避免 keep-alive 出现匿名组件无法命中的问题。
-    if (view.name && !cachedViews.value.includes(view.name)) {
+    // 仅缓存具名且声明 keepAlive 的页面，详情页（keepAlive:false）不缓存。
+    if (view.name && view.meta?.keepAlive !== false && !cachedViews.value.includes(view.name)) {
       cachedViews.value.push(view.name)
     }
   }
 
   // 删除单个标签。
   function delView(path) {
+    const target = visitedViews.value.find((item) => item.path == path)
     visitedViews.value = visitedViews.value.filter((item) => item.path != path)
+    if (target?.name) {
+      cachedViews.value = cachedViews.value.filter((name) => name !== target.name)
+    }
     sync()
   }
 

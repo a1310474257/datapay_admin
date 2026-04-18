@@ -7,6 +7,7 @@ import App from './App.vue'
 import router from './router'
 import './permission'
 import './assets/styles/index.scss'
+import { setupDirectives } from './directives'
 
 // 项目统一入口：
 // 1. 根据环境变量决定是否初始化 Mock 数据；
@@ -33,6 +34,8 @@ async function bootstrap() {
   app.use(pinia)
   app.use(router)
   app.use(ElementPlus)
+  // 第3批开始引入按钮级权限指令（v-permission）。
+  setupDirectives(app)
   app.mount('#app')
 }
 
