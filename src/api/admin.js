@@ -96,6 +96,13 @@ export async function getMyProfile() {
       'teacher:create', 'teacher:update', 'teacher:delete',
       'course:create', 'course:update', 'course:delete', 'course:publish',
       'order:cancel', 'order:remark', 'order:ship',
+      'product:create', 'product:update', 'product:delete',
+      'refund:approve', 'refund:reject',
+      'banner:create', 'banner:update', 'banner:delete',
+      'notice:create', 'notice:update', 'notice:delete',
+      'hotSearch:create', 'hotSearch:update', 'hotSearch:delete',
+      'resource:create', 'resource:update', 'resource:delete',
+      'activity:create', 'activity:update', 'activity:delete',
     ],
   }
 }

@@ -6,6 +6,12 @@ const productRoutes = [
     component: () => import('@/views/product/list/index.vue'),
     meta: { title: '商品列表', icon: 'Goods', permission: 'ProductList' },
   },
+  {
+    path: 'product/detail/:id',
+    name: 'ProductDetail',
+    component: () => import('@/views/product/detail/index.vue'),
+    meta: { title: '商品详情', keepAlive: false },
+  },
 ]
 
 export default productRoutes

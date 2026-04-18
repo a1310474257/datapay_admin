@@ -7,6 +7,12 @@ const activityRoutes = [
     meta: { title: '活动列表', icon: 'Calendar', permission: 'ActivityList' },
   },
   {
+    path: 'activity/detail/:id',
+    name: 'ActivityDetail',
+    component: () => import('@/views/activity/detail/index.vue'),
+    meta: { title: '活动详情', keepAlive: false },
+  },
+  {
     path: 'activity/register',
     name: 'ActivityRegister',
     component: () => import('@/views/activity/register/index.vue'),

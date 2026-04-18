@@ -6,12 +6,14 @@
           <span>{{ isCreateMode ? '新建课程' : `课程详情 #${route.params.id}` }}</span>
           <el-space>
             <el-button @click="goBack">返回列表</el-button>
-            <el-button type="primary" :loading="submitting" @click="handleSubmit">保存</el-button>
+            <el-button v-if="activeTab === 'base'" type="primary" :loading="submitting" @click="handleSubmit">
+              保存
+            </el-button>
           </el-space>
         </div>
       </template>
 
-      <el-tabs v-model="activeTab">
+      <el-tabs v-model="activeTab" @tab-change="onTabChange">
         <el-tab-pane label="基本信息" name="base">
           <el-form ref="formRef" :model="formModel" :rules="rules" label-width="110px">
             <el-form-item label="课程分类" prop="category_id">
@@ -46,29 +48,82 @@
             </el-form-item>
           </el-form>
         </el-tab-pane>
-        <el-tab-pane label="章节课时" name="chapter">
-          <el-empty description="P1 阶段支持" />
+        <el-tab-pane label="章节课时" name="chapter" :disabled="isCreateMode">
+          <ChapterLessonTree
+            v-model:tree="chapterTree"
+            :course-id="route.params.id"
+            :loading="chapterSaving"
+            @save="saveChapterTree"
+          />
         </el-tab-pane>
-        <el-tab-pane label="配套资料" name="material">
-          <el-empty description="P1 阶段支持" />
+        <el-tab-pane label="配套资料" name="material" :disabled="isCreateMode">
+          <ProTable ref="matTableRef" :columns="matColumns" :load-data="loadMaterials">
+            <template #toolbar-left>
+              <el-button type="primary" @click="openMaterialDialog()">新增资料</el-button>
+            </template>
+            <template #actions="{ row }">
+              <el-space>
+                <el-button link type="primary" @click="openMaterialDialog(row)">编辑</el-button>
+                <el-button link type="danger" @click="removeMaterial(row)">删除</el-button>
+              </el-space>
+            </template>
+          </ProTable>
         </el-tab-pane>
         <el-tab-pane label="其他配置" name="other">
-          <el-empty description="P1 阶段支持" />
+          <el-empty description="预留扩展：推荐位、标签等" />
         </el-tab-pane>
       </el-tabs>
     </el-card>
+
+    <el-dialog v-model="matDialog" :title="matForm.id ? '编辑资料' : '新增资料'" width="560px" destroy-on-close>
+      <el-form ref="matFormRef" :model="matForm" :rules="matRules" label-width="96px">
+        <el-form-item label="标题" prop="title">
+          <el-input v-model="matForm.title" />
+        </el-form-item>
+        <el-form-item label="类型" prop="type">
+          <el-select v-model="matForm.type" placeholder="选择类型">
+            <el-option label="PDF" value="PDF" />
+            <el-option label="DOCX" value="DOCX" />
+            <el-option label="ZIP" value="ZIP" />
+            <el-option label="MP4" value="MP4" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="文件" prop="url">
+          <UploadFile v-model="matForm.url" />
+        </el-form-item>
+        <el-form-item label="排序" prop="sort">
+          <el-input-number v-model="matForm.sort" :min="1" :max="9999" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="matDialog = false">取消</el-button>
+        <el-button type="primary" :loading="matSaving" @click="submitMaterial">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import DictSelect from '@/components/DictSelect/index.vue'
 import UploadImage from '@/components/UploadImage/index.vue'
 import RichEditor from '@/components/RichEditor/index.vue'
 import PriceInput from '@/components/PriceInput/index.vue'
-import { createCourse, findCourseById, updateCourse } from '@/api/course'
+import UploadFile from '@/components/UploadFile/index.vue'
+import ProTable from '@/components/ProTable/index.vue'
+import ChapterLessonTree from '@/components/ChapterLessonTree/index.vue'
+import {
+  createCourse,
+  findCourseById,
+  getChapters,
+  getMaterials,
+  saveChapters,
+  saveMaterial,
+  deleteMaterial,
+  updateCourse,
+} from '@/api/course'
 import { useDictStore } from '@/stores/dict'
 
 const route = useRoute()
@@ -105,6 +160,35 @@ const rules = {
   original_price: [{ required: true, message: '请输入原价', trigger: 'change' }],
 }
 
+const chapterTree = ref([])
+const chapterSaving = ref(false)
+
+const matTableRef = ref(null)
+const matDialog = ref(false)
+const matSaving = ref(false)
+const matFormRef = ref(null)
+const matForm = reactive({
+  id: null,
+  title: '',
+  type: 'PDF',
+  url: '',
+  sort: 1,
+})
+const matRules = {
+  title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
+  type: [{ required: true, message: '请选择类型', trigger: 'change' }],
+  url: [{ required: true, message: '请上传文件', trigger: 'change' }],
+}
+
+const matColumns = [
+  { prop: 'title', label: '标题', minWidth: 160 },
+  { prop: 'type', label: '类型', width: 100 },
+  { prop: 'file_size', label: '大小', width: 100 },
+  { prop: 'url', label: '下载链接', minWidth: 200, showOverflowTooltip: true },
+  { prop: 'sort', label: '排序', width: 80 },
+  { prop: 'actions', label: '操作', width: 140, fixed: 'right', slot: 'actions' },
+]
+
 function assignForm(data = {}) {
   Object.assign(formModel, {
     category_id: data.category_id,
@@ -136,6 +220,93 @@ async function loadDetail() {
   } catch (error) {
     ElMessage.error(error?.message || '课程详情加载失败')
     goBack()
+  }
+}
+
+async function loadChapterData() {
+  if (isCreateMode.value) return
+  try {
+    chapterTree.value = await getChapters(route.params.id)
+  } catch (e) {
+    ElMessage.error(e?.message || '章节加载失败')
+  }
+}
+
+async function onTabChange(name) {
+  if (name === 'chapter') await loadChapterData()
+  if (name === 'material') matTableRef.value?.refresh()
+}
+
+async function saveChapterTree() {
+  if (isCreateMode.value) return
+  chapterSaving.value = true
+  try {
+    await saveChapters(route.params.id, chapterTree.value)
+    ElMessage.success('章节已保存')
+    await loadChapterData()
+  } catch (e) {
+    ElMessage.error(e?.message || '保存失败')
+  } finally {
+    chapterSaving.value = false
+  }
+}
+
+function loadMaterials(params) {
+  return getMaterials(route.params.id).then((all) => {
+    const page = Number(params.page || 1)
+    const pageSize = Number(params.pageSize || 10)
+    const start = (page - 1) * pageSize
+    return {
+      list: all.slice(start, start + pageSize),
+      total: all.length,
+      page,
+      pageSize,
+    }
+  })
+}
+
+function openMaterialDialog(row) {
+  if (row?.id) {
+    Object.assign(matForm, {
+      id: row.id,
+      title: row.title,
+      type: row.type,
+      url: row.url,
+      sort: row.sort,
+    })
+  } else {
+    Object.assign(matForm, { id: null, title: '', type: 'PDF', url: '', sort: 1 })
+  }
+  matDialog.value = true
+}
+
+async function submitMaterial() {
+  const ok = await matFormRef.value?.validate().catch(() => false)
+  if (!ok) return
+  matSaving.value = true
+  try {
+    await saveMaterial(route.params.id, {
+      ...matForm,
+      file_size: matForm.file_size || '—',
+    })
+    ElMessage.success('资料已保存')
+    matDialog.value = false
+    matTableRef.value?.refresh()
+  } catch (e) {
+    ElMessage.error(e?.message || '保存失败')
+  } finally {
+    matSaving.value = false
+  }
+}
+
+async function removeMaterial(row) {
+  try {
+    await ElMessageBox.confirm('确认删除该资料？', '提示', { type: 'warning' })
+    await deleteMaterial(row.id)
+    ElMessage.success('已删除')
+    matTableRef.value?.refresh()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e?.message || '删除失败')
   }
 }
 

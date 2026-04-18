@@ -8,6 +8,7 @@ export function seedHotSearch(db) {
       id: i + 1,
       keyword,
       sort: i + 1,
+      hits: (i + 1) * 120,
       status: 1,
       created_at: dt(),
       updated_at: dt(),

@@ -37,6 +37,7 @@ export function seedOrder(db) {
       finish_time: status === 3 ? dt() : null,
       cancel_time: status === 6 ? dt() : null,
       pay_expire_at: status === 0 ? dt() : null,
+      remark: i % 17 === 0 ? '客服备注示例' : '',
       created_at: dt(),
       updated_at: dt(),
       deleted_at: null,

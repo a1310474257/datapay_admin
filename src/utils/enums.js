@@ -72,6 +72,7 @@ export const PAY_RECORD_STATUS = {
 
 export const REFUND_STATUS = {
   0: { label: '待审批', type: 'warning' },
+  3: { label: '审批中', type: 'primary' },
   1: { label: '已通过', type: 'success' },
   2: { label: '已拒绝', type: 'info' },
 }

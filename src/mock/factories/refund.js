@@ -6,6 +6,7 @@ export function seedRefund(db) {
     const status = i % 3
     db.refund.push({
       id: i + 1,
+      refund_no: `RF${String(100000 + i + 1)}`,
       order_id: order.id,
       user_id: order.user_id,
       amount: Math.min(order.actual_pay, 49900),

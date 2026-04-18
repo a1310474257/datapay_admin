@@ -9,6 +9,7 @@ export function seedActivitySpeaker(db) {
         activity_id: activity.id,
         name: `嘉宾${activity.id}-${i}`,
         title: '资深专家',
+        brief: '十年行业经验，擅长组织发展与人才盘点。',
         avatar: pic(`speaker-${id}`),
         sort: i,
         created_at: dt(),

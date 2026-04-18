@@ -55,13 +55,31 @@
           >
             取消
           </el-button>
-          <el-tooltip
-            v-if="Number(row.status) === 1"
-            content="P1 阶段支持"
-            placement="top"
+          <el-button
+            v-if="Number(row.status) === 1 && Number(row.order_type) === 5"
+            v-permission="'order:ship'"
+            link
+            type="primary"
+            @click="openShip(row)"
           >
-            <el-button v-permission="'order:ship'" link disabled>发货</el-button>
-          </el-tooltip>
+            发货
+          </el-button>
+          <el-button
+            v-if="Number(row.status) === 2 && Number(row.order_type) === 5"
+            v-permission="'order:ship'"
+            link
+            @click="openShip(row, true)"
+          >
+            改运单
+          </el-button>
+          <el-button
+            v-if="Number(row.status) === 4"
+            link
+            type="danger"
+            @click="goRefund(row)"
+          >
+            查看退款
+          </el-button>
           <el-button
             v-if="[0, 1, 2, 3].includes(Number(row.status))"
             v-permission="'order:remark'"
@@ -74,6 +92,15 @@
         </el-space>
       </template>
     </ProTable>
+
+    <ShipOrderDialog
+      v-model:visible="shipVisible"
+      :order-id="shipTarget?.id"
+      :initial-express-name="shipTarget?.express_company"
+      :initial-express-no="shipTarget?.express_no"
+      :edit-mode="shipEdit"
+      @success="onShipSuccess"
+    />
   </div>
 </template>
 
@@ -88,8 +115,12 @@ import { ORDER_STATUS, ORDER_TYPE } from '@/utils/enums'
 import { fen2yuan } from '@/utils/price'
 import { cancelOrder, getOrderList, getOrderStatusCount, updateOrderRemark } from '@/api/order'
 import { useTable } from '@/hooks/useTable'
+import ShipOrderDialog from '@/views/order/components/ShipOrderDialog.vue'
 
 const router = useRouter()
+const shipVisible = ref(false)
+const shipTarget = ref(null)
+const shipEdit = ref(false)
 const activeStatusTab = ref('')
 const statusCountMap = reactive({ 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 })
 const { tableRef, searchParams, loadData, onSearch } = useTable({
@@ -163,6 +194,21 @@ function handleTabChange(status) {
 
 function goDetail(row) {
   router.push(`/order/detail/${row.id}`)
+}
+
+function openShip(row, edit = false) {
+  shipTarget.value = row
+  shipEdit.value = Boolean(edit)
+  shipVisible.value = true
+}
+
+function onShipSuccess() {
+  loadStatusCount()
+  tableRef.value?.refresh()
+}
+
+function goRefund(row) {
+  router.push({ path: '/order/refund', query: { order_id: row.id } })
 }
 
 async function handleCancel(row) {

@@ -97,3 +97,30 @@ export async function cancelOrder(id, reason) {
 export async function updateOrderRemark(id, remark) {
   return mockApi.update(db.order, id, { remark: remark || '' })
 }
+
+// 发货：实物订单付款后流转为已发货，并写入物流信息。
+export async function shipOrder(id, { express_company, express_no }) {
+  await delay()
+  const order = db.order.find((item) => Number(item.id) === Number(id))
+  if (!order) throw new Error('订单不存在')
+  if (Number(order.status) !== 1) throw new Error('当前状态不可发货')
+  if (Number(order.order_type) !== 5) throw new Error('非实物订单无需发货')
+  return mockApi.update(db.order, id, {
+    status: 2,
+    express_company: express_company || '',
+    express_no: express_no || '',
+    ship_time: now(),
+  })
+}
+
+// 已发货订单仅更新物流信息。
+export async function updateOrderExpress(id, { express_company, express_no }) {
+  await delay()
+  const order = db.order.find((item) => Number(item.id) === Number(id))
+  if (!order) throw new Error('订单不存在')
+  if (Number(order.status) !== 2) throw new Error('仅已发货订单可修改运单')
+  return mockApi.update(db.order, id, {
+    express_company: express_company || '',
+    express_no: express_no || '',
+  })
+}

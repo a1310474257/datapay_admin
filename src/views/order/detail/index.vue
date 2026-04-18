@@ -17,6 +17,7 @@
         <el-descriptions-item label="订单状态">
           <StatusTag :dict="ORDER_STATUS" :value="order.status" />
         </el-descriptions-item>
+        <el-descriptions-item label="备注" :span="2">{{ order.remark || '—' }}</el-descriptions-item>
       </el-descriptions>
     </el-card>
 
@@ -86,18 +87,43 @@
     </el-card>
 
     <el-card class="block-card" header="操作区">
-      <el-space>
+      <el-space wrap>
         <el-button v-if="Number(order.status) === 0" type="danger" @click="handleCancel">取消订单</el-button>
+        <el-button
+          v-if="Number(order.status) === 1 && Number(order.order_type) === 5"
+          v-permission="'order:ship'"
+          type="primary"
+          @click="openShip(false)"
+        >
+          发货
+        </el-button>
+        <el-button
+          v-if="Number(order.status) === 2 && Number(order.order_type) === 5"
+          v-permission="'order:ship'"
+          @click="openShip(true)"
+        >
+          修改运单
+        </el-button>
+        <el-button v-if="Number(order.status) === 4" type="danger" @click="goRefund">查看退款</el-button>
         <el-button v-if="[0, 1, 2, 3].includes(Number(order.status))" type="warning" @click="handleRemark">
           更新备注
         </el-button>
       </el-space>
     </el-card>
+
+    <ShipOrderDialog
+      v-model:visible="shipVisible"
+      :order-id="order.id"
+      :initial-express-name="order.express_company"
+      :initial-express-no="order.express_no"
+      :edit-mode="shipEdit"
+      @success="loadDetail"
+    />
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import AddressSnapView from '@/components/AddressSnapView/index.vue'
@@ -105,9 +131,12 @@ import StatusTag from '@/components/StatusTag/index.vue'
 import { ORDER_STATUS, ORDER_TYPE } from '@/utils/enums'
 import { fen2yuan } from '@/utils/price'
 import { cancelOrder, getOrderDetail, updateOrderRemark } from '@/api/order'
+import ShipOrderDialog from '@/views/order/components/ShipOrderDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
+const shipVisible = ref(false)
+const shipEdit = ref(false)
 const order = reactive({
   user: {},
   items: [],
@@ -159,6 +188,15 @@ async function handleRemark() {
 
 function goBack() {
   router.push('/order/list')
+}
+
+function openShip(edit) {
+  shipEdit.value = Boolean(edit)
+  shipVisible.value = true
+}
+
+function goRefund() {
+  router.push({ path: '/order/refund', query: { order_id: order.id } })
 }
 
 onMounted(() => {
