@@ -270,7 +270,7 @@ async function saveSp() {
 async function removeSp(row) {
   try {
     await ElMessageBox.confirm('确认删除？', '提示', { type: 'warning' })
-    await deleteActivitySpeaker(row.id)
+    await deleteActivitySpeaker(route.params.id, row.id)
     ElMessage.success('已删除')
     spTableRef.value?.refresh()
   } catch (e) {

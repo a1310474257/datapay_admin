@@ -1,69 +1,97 @@
-import { db } from '@/mock'
-import { delay, mockApi } from './mockApi'
+import request from './request'
+import { fromBackendPage, makeRowMapper, withAliases } from './adapter'
 
-function resolveTargetTitle(type, targetId) {
-  const id = Number(targetId)
-  if (!id) return ''
-  if (Number(type) === 1) return db.course.find((c) => Number(c.id) === id)?.title || ''
-  if (Number(type) === 2) return db.activity.find((a) => Number(a.id) === id)?.title || ''
-  if (Number(type) === 3) return db.product.find((p) => Number(p.id) === id)?.title || ''
-  if (Number(type) === 4) {
-    const r = db.resource.find((x) => Number(x.id) === id && Number(x.resource_type) === 1)
-    return r?.title || ''
-  }
-  return ''
-}
+// Banner 管理：/api/admin/banners
+// 后端命名：pageNum / pageSize / image / type / targetId / title / sort / status
 
-function decorate(row) {
+function mapRow(row) {
   return {
-    ...row,
-    target_title: resolveTargetTitle(row.type, row.target_id),
+    ...withAliases(row),
+    target_id: row.targetId ?? row.target_id,
+    target_title: '', // 后端未返回关联标题，候选列表里可从 searchBannerTargets 获取
   }
 }
+const rowMapper = makeRowMapper(mapRow)
 
 export async function getBannerList(params = {}) {
-  const base = await mockApi.crud(db.banner, params, {
-    filterFields: ['status', 'type'],
-    defaultSort: 'sort,asc',
-    searchFields: ['title'],
+  const backendParams = {
+    pageNum: params.page || 1,
+    pageSize: params.pageSize || 10,
+    keyword: params.title || params.keyword || undefined,
+    status: params.status === '' || params.status === undefined ? undefined : Number(params.status),
+    type: params.type === '' || params.type === undefined ? undefined : Number(params.type),
+  }
+  Object.keys(backendParams).forEach((k) => {
+    if (backendParams[k] === undefined || backendParams[k] === '') delete backendParams[k]
   })
-  return { ...base, list: base.list.map(decorate) }
+  const page = await request.get('/admin/banners', { params: backendParams })
+  return fromBackendPage(page, rowMapper)
+}
+
+function toBackendPayload(data = {}) {
+  return {
+    image: data.image,
+    type: Number(data.type),
+    targetId: Number(data.target_id ?? data.targetId ?? 0),
+    title: data.title || '',
+    sort: Number(data.sort ?? 0),
+    status: data.status === undefined ? 1 : Number(data.status),
+  }
 }
 
 export async function createBanner(data) {
-  return mockApi.create(db.banner, data)
+  const id = await request.post('/admin/banners', toBackendPayload(data))
+  return { id }
 }
 
 export async function updateBanner(id, data) {
-  return mockApi.update(db.banner, id, data)
+  await request.put(`/admin/banners/${id}`, toBackendPayload(data))
+  return { id }
 }
 
 export async function deleteBanner(id) {
-  return mockApi.remove(db.banner, id)
+  return request.delete(`/admin/banners/${id}`)
 }
 
 export async function findBannerById(id) {
-  const row = await mockApi.findById(db.banner, id)
-  return row ? decorate(row) : null
+  const row = await request.get(`/admin/banners/${id}`)
+  return row ? mapRow(row) : null
 }
 
-// 供 TargetPicker 远程搜索：按类型拉取候选列表。
+// 目标候选：根据类型分别调对应的 admin 列表接口。
+// type: 1-课程 2-活动 3-商品 4-HR工具（resource type=1）
 export async function searchBannerTargets(type, params = {}) {
-  await delay()
-  const keyword = String(params.keyword || '').trim()
-  const page = Number(params.page || 1)
-  const pageSize = Number(params.pageSize || 10)
-  let rows = []
+  const keyword = params.keyword || ''
+  const page = params.page || 1
+  const pageSize = params.pageSize || 10
   const t = Number(type)
-  if (t === 1) rows = db.course.filter((r) => r.deleted_at == null)
-  else if (t === 2) rows = db.activity.filter((r) => r.deleted_at == null)
-  else if (t === 3) rows = db.product.filter((r) => r.deleted_at == null)
-  else if (t === 4) rows = db.resource.filter((r) => r.deleted_at == null && Number(r.resource_type) === 1)
-  if (keyword) {
-    rows = rows.filter((r) => String(r.title || '').includes(keyword))
+  let url
+  const query = { page, size: pageSize, keyword }
+  if (t === 1) {
+    url = '/admin/courses'
+  } else if (t === 2) {
+    url = '/admin/activities'
+    // 活动接口使用 pageNum/pageSize
+    delete query.page
+    delete query.size
+    query.pageNum = page
+    query.pageSize = pageSize
+  } else if (t === 3) {
+    url = '/admin/products'
+  } else if (t === 4) {
+    url = '/admin/resources'
+    query.resourceType = 1
+  } else {
+    return { list: [], total: 0, page, pageSize }
   }
-  rows = rows.sort((a, b) => Number(b.id) - Number(a.id))
-  const total = rows.length
-  const list = rows.slice((page - 1) * pageSize, page * pageSize).map((r) => ({ id: r.id, title: r.title }))
-  return { list, total, page, pageSize }
+  Object.keys(query).forEach((k) => {
+    if (query[k] === undefined || query[k] === '') delete query[k]
+  })
+  const res = await request.get(url, { params: query }).catch(() => null)
+  if (!res) return { list: [], total: 0, page, pageSize }
+  const normalized = fromBackendPage(res, makeRowMapper((r) => ({
+    id: r.id,
+    title: r.title || r.name,
+  })))
+  return normalized
 }

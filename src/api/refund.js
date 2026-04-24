@@ -1,96 +1,89 @@
-import { db } from '@/mock'
-import { now } from '@/utils/date'
-import { delay, mockApi } from './mockApi'
+import request from './request'
+import { fromBackendPage, toBackendParams } from './adapter'
+import { reviewOrderRefund } from './order'
 
-function withJoin(row) {
-  if (!row) return row
-  const order = db.order.find((o) => Number(o.id) === Number(row.order_id))
-  const user = db.user.find((u) => Number(u.id) === Number(row.user_id))
+// 后端当前尚未提供独立的“退款工单”表与列表接口。
+// 前端页面以订单状态为轴聚合出一个简化版退款清单：
+//  - 待审批(0) ← 订单 status=refunding
+//  - 已通过(1) ← 订单 status=refunded
+//  - 已拒绝(2) ← 后端未保留拒绝快照，返回空
+//
+// 审批动作统一转发到 /api/admin/orders/{orderNo}/refund/review。
+// 未来若后端新增独立的退款单表，可在此无痛替换。
+
+function mapRefundRow(order, refundStatusNum) {
+  const orderNo = order.id || order.orderNo
   return {
-    ...row,
-    order_no: order?.order_no || '',
-    user_nickname: user?.nickname || '—',
-    user_phone: user?.phone || '—',
+    id: orderNo, // 前端用它作 :key 和审批依据
+    refund_no: `REFUND-${orderNo}`,
+    order_no: orderNo,
+    user_nickname: order.userNickname || '—',
+    user_phone: order.userPhone || '—',
+    amount: order.totalPrice,
+    reason: order.refundReason || '',
+    status: refundStatusNum,
+    created_at: order.createTime,
+    refund_time: order.refundTime || '',
+    remark: order.refundRemark || '',
+    order_snapshot: {
+      actual_pay: order.totalPrice,
+      created_at: order.createTime,
+    },
   }
+}
+
+function toRefundStatus(frontendStatus) {
+  // 前端 tab 的 '0'/'1'/'2' 对应后端订单 status 枚举
+  const key = String(frontendStatus)
+  if (key === '0') return 'refunding'
+  if (key === '1') return 'refunded'
+  return null
 }
 
 export async function getRefundList(params = {}) {
-  await delay()
-  const page = Number(params.page || 1)
-  const pageSize = Number(params.pageSize || 10)
-  let rows = db.refund.map(withJoin)
-  if (params.status !== '' && params.status !== undefined) {
-    const s = Number(params.status)
-    if (s === 0) {
-      rows = rows.filter((r) => [0, 3].includes(Number(r.status)))
-    } else {
-      rows = rows.filter((r) => Number(r.status) === s)
-    }
+  const target = toRefundStatus(params.status)
+  if (!target) {
+    return { list: [], total: 0, page: Number(params.page || 1), pageSize: Number(params.pageSize || 10) }
   }
-  if (params.order_id) {
-    rows = rows.filter((r) => Number(r.order_id) === Number(params.order_id))
-  }
-  if (params.keyword) {
-    const kw = String(params.keyword).trim()
-    rows = rows.filter(
-      (r) =>
-        String(r.refund_no || '').includes(kw) ||
-        String(r.order_no || '').includes(kw) ||
-        String(r.user_nickname || '').includes(kw),
-    )
-  }
-  if (params.created_at?.length === 2) {
-    const [start, end] = params.created_at
-    rows = rows.filter(
-      (r) => String(r.created_at) >= `${start} 00:00:00` && String(r.created_at) <= `${end} 23:59:59`,
-    )
-  }
-  rows.sort((a, b) => Number(b.id) - Number(a.id))
-  const total = rows.length
-  const list = rows.slice((page - 1) * pageSize, page * pageSize)
-  return { list, total, page, pageSize }
+  const [startDate, endDate] = Array.isArray(params.created_at) ? params.created_at : []
+  const backendParams = toBackendParams(params, {
+    status: target,
+    startDate,
+    endDate,
+  })
+  delete backendParams.keyword
+  delete backendParams.order_id
+  delete backendParams.created_at
+  const page = await request.get('/admin/orders', { params: backendParams })
+  const refundStatusNum = String(params.status) === '1' ? 1 : 0
+  return fromBackendPage(page, (row) => mapRefundRow(row, refundStatusNum))
 }
 
-export async function getRefundDetail(id) {
-  await delay()
-  const row = db.refund.find((r) => Number(r.id) === Number(id))
-  if (!row) throw new Error('退款单不存在')
-  const order = db.order.find((o) => Number(o.id) === Number(row.order_id))
-  const user = db.user.find((u) => Number(u.id) === Number(row.user_id))
-  const items = order ? db.orderItem.filter((it) => Number(it.order_id) === Number(order.id)) : []
+export async function getRefundDetail(orderNo) {
+  const data = await request.get(`/admin/orders/${orderNo}`)
+  if (!data) throw new Error('退款单不存在')
+  const status = String(data.status)
+  const refundStatusNum = status === 'refunded' ? 1 : status === 'refunding' ? 0 : 2
   return {
-    ...withJoin(row),
-    order_snapshot: order ? { ...order, items } : null,
-    user,
+    ...mapRefundRow({
+      id: data.id,
+      userNickname: '',
+      userPhone: '',
+      totalPrice: data.totalPrice,
+      createTime: data.createTime,
+    }, refundStatusNum),
+    order_snapshot: {
+      actual_pay: data.totalPrice,
+      created_at: data.createTime,
+      items: data.items,
+    },
   }
 }
 
-function scheduleFinal(id, patch) {
-  setTimeout(() => {
-    const target = db.refund.find((r) => Number(r.id) === Number(id))
-    if (!target) return
-    Object.assign(target, patch, { updated_at: now() })
-  }, 3000)
+export async function approveRefund(orderNo, remark) {
+  return reviewOrderRefund(orderNo, true, remark)
 }
 
-// 同意退款：先进入审批中，3 秒后变为已通过。
-export async function approveRefund(id) {
-  await delay()
-  const row = db.refund.find((r) => Number(r.id) === Number(id))
-  if (!row) throw new Error('退款单不存在')
-  if (Number(row.status) !== 0) throw new Error('当前状态不可审批')
-  Object.assign(row, { status: 3, updated_at: now() })
-  scheduleFinal(id, { status: 1, refund_time: now() })
-  return withJoin(row)
-}
-
-// 拒绝退款。
-export async function rejectRefund(id, remark) {
-  await delay()
-  const row = db.refund.find((r) => Number(r.id) === Number(id))
-  if (!row) throw new Error('退款单不存在')
-  if (Number(row.status) !== 0) throw new Error('当前状态不可审批')
-  Object.assign(row, { status: 3, updated_at: now() })
-  scheduleFinal(id, { status: 2, remark: remark || '已拒绝' })
-  return withJoin(row)
+export async function rejectRefund(orderNo, remark) {
+  return reviewOrderRefund(orderNo, false, remark)
 }

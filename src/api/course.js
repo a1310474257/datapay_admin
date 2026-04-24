@@ -1,138 +1,212 @@
-import { db } from '@/mock'
-import { now } from '@/utils/date'
-import { delay, mockApi } from './mockApi'
+import request from './request'
+import { fromBackendPage, makeRowMapper, withAliases } from './adapter'
 
-// 课程列表：支持关键字、分类、讲师、状态筛选。
+// 课程管理：/api/admin/courses
+// 后端：pageNum / pageSize / title / categoryId / teacherId / status / createdStart / createdEnd
+
+function mapCourseRow(row) {
+  const aliased = withAliases(row)
+  return {
+    ...aliased,
+    category_id: row.categoryId,
+    teacher_id: row.teacherId,
+    teacher_name: row.teacherName,
+    total_duration: row.totalDuration,
+    original_price: row.originalPrice,
+    chapter_count: row.chapterCount,
+  }
+}
+const rowMapper = makeRowMapper(mapCourseRow)
+
 export async function getCourseList(params = {}) {
-  const payload = { ...params, sort: params.sort || 'id,desc' }
-  const base = await mockApi.crud(db.course, payload, {
-    filterFields: ['category_id', 'teacher_id', 'status'],
+  const backendParams = {
+    pageNum: params.page || 1,
+    pageSize: params.pageSize || 10,
+    title: params.keyword || params.title || undefined,
+    categoryId: params.category_id || params.categoryId || undefined,
+    teacherId: params.teacher_id || params.teacherId || undefined,
+    status: params.status === '' || params.status === undefined ? undefined : Number(params.status),
+  }
+  Object.keys(backendParams).forEach((k) => {
+    if (backendParams[k] === undefined || backendParams[k] === '') delete backendParams[k]
   })
-  const keyword = String(params.keyword || '').trim()
-  const rows = keyword
-    ? base.list.filter((item) => String(item.title || '').includes(keyword))
-    : base.list
-  return { ...base, list: rows }
+  const page = await request.get('/admin/courses', { params: backendParams })
+  return fromBackendPage(page, rowMapper)
 }
 
-// 新增课程。
+function toBackendPayload(data = {}) {
+  return {
+    categoryId: data.category_id ?? data.categoryId ?? 0,
+    teacherId: data.teacher_id ?? data.teacherId ?? 0,
+    title: data.title,
+    cover: data.cover || '',
+    brief: data.brief || '',
+    description: data.description || '',
+    totalDuration: data.total_duration || data.totalDuration || '',
+    price: data.price == null ? 0 : Number(data.price),
+    originalPrice: data.original_price ?? data.originalPrice ?? 0,
+    status: data.status === undefined ? 1 : Number(data.status),
+  }
+}
+
 export async function createCourse(data) {
-  return mockApi.create(db.course, {
-    ...data,
-    chapter_count: Number(data.chapter_count || 0),
-    sales: Number(data.sales || 0),
-  })
+  const id = await request.post('/admin/courses', toBackendPayload(data))
+  return { id }
 }
 
-// 更新课程。
 export async function updateCourse(id, data) {
-  return mockApi.update(db.course, id, data)
+  await request.put(`/admin/courses/${id}`, toBackendPayload(data))
+  return { id }
 }
 
-// 删除课程。
 export async function deleteCourse(id) {
-  return mockApi.remove(db.course, id)
+  return request.delete(`/admin/courses/${id}`)
 }
 
-// 按 id 查询课程详情。
 export async function findCourseById(id) {
-  const row = await mockApi.findById(db.course, id)
+  const row = await request.get(`/admin/courses/${id}`)
   if (!row) throw new Error('课程不存在')
-  return row
+  return mapCourseRow(row)
 }
 
-// 上下架切换。
 export async function toggleCourseStatus(id, status) {
-  return mockApi.update(db.course, id, { status: Number(status) })
+  // 后端没有独立状态接口，复用 update。
+  const current = await findCourseById(id)
+  return updateCourse(id, { ...current, status: Number(status) })
 }
 
-// 章节 + 课时树：按课程聚合章节与其下课时，供 ChapterLessonTree 使用。
+// ------- 章节/课时（/api/admin/courses/{courseId}/chapters/...） -------
+// 前端 ChapterLessonTree 以“树形”方式批量保存。后端仅提供单条 CRUD，
+// 这里通过“先拉当前树 → 删全部 → 按新树重建”实现。
+
+async function fetchChaptersRaw(courseId) {
+  const page = await request.get(`/admin/courses/${courseId}/chapters`, {
+    params: { pageNum: 1, pageSize: 100 },
+  })
+  return fromBackendPage(page).list
+}
+
+async function fetchLessonsRaw(courseId, chapterId) {
+  const page = await request.get(`/admin/courses/${courseId}/chapters/${chapterId}/lessons`, {
+    params: { pageNum: 1, pageSize: 200 },
+  })
+  return fromBackendPage(page).list
+}
+
 export async function getChapters(courseId) {
-  await delay()
-  const cid = Number(courseId)
-  const chapters = db.courseChapter
-    .filter((row) => Number(row.course_id) === cid)
-    .sort((a, b) => Number(a.sort) - Number(b.sort))
-  return chapters.map((ch) => ({
-    id: ch.id,
-    course_id: cid,
-    title: ch.title,
-    sort: ch.sort,
-    lessons: db.courseLesson
-      .filter((les) => Number(les.chapter_id) === Number(ch.id))
-      .sort((a, b) => Number(a.sort) - Number(b.sort))
-      .map((les) => ({ ...les })),
+  const chapters = await fetchChaptersRaw(courseId)
+  const sorted = chapters.sort((a, b) => Number(a.sort) - Number(b.sort))
+  const results = await Promise.all(sorted.map(async (ch) => {
+    const lessons = await fetchLessonsRaw(courseId, ch.id)
+    return {
+      id: ch.id,
+      course_id: Number(courseId),
+      title: ch.title,
+      sort: ch.sort,
+      lessons: lessons
+        .sort((a, b) => Number(a.sort) - Number(b.sort))
+        .map((les) => ({
+          id: les.id,
+          course_id: Number(courseId),
+          chapter_id: ch.id,
+          title: les.title,
+          duration_sec: les.durationSec,
+          video_url: les.videoUrl,
+          is_free: les.isFree,
+          sort: les.sort,
+        })),
+    }
   }))
+  return results
 }
 
-// 批量保存章节树：先清理该课程旧数据，再写入新树并同步 chapter_count。
 export async function saveChapters(courseId, tree) {
-  await delay()
   const cid = Number(courseId)
-  const oldChapterIds = db.courseChapter.filter((c) => Number(c.course_id) === cid).map((c) => c.id)
-  db.courseLesson = db.courseLesson.filter((l) => !oldChapterIds.includes(Number(l.chapter_id)))
-  db.courseChapter = db.courseChapter.filter((c) => Number(c.course_id) !== cid)
-
-  let nextChapterId = db.courseChapter.reduce((m, r) => Math.max(m, Number(r.id || 0)), 0) + 1
-  let nextLessonId = db.courseLesson.reduce((m, r) => Math.max(m, Number(r.id || 0)), 0) + 1
-  const stamp = now()
+  const existing = await fetchChaptersRaw(cid)
+  // 先删除所有旧章节（后端应级联删除章节下课时）。
+  for (const ch of existing) {
+    // eslint-disable-next-line no-await-in-loop
+    await request.delete(`/admin/courses/${cid}/chapters/${ch.id}`)
+  }
   const list = Array.isArray(tree) ? tree : []
-  list.forEach((ch, chIdx) => {
-    const chapterId = nextChapterId
-    nextChapterId += 1
-    db.courseChapter.push({
-      id: chapterId,
-      course_id: cid,
-      title: ch.title || `章节 ${chIdx + 1}`,
-      sort: Number(ch.sort ?? chIdx + 1),
-      created_at: stamp,
-      updated_at: stamp,
+  for (let i = 0; i < list.length; i += 1) {
+    const ch = list[i]
+    // eslint-disable-next-line no-await-in-loop
+    const chapterId = await request.post(`/admin/courses/${cid}/chapters`, {
+      title: ch.title || `章节 ${i + 1}`,
+      sort: Number(ch.sort ?? i + 1),
     })
     const lessons = Array.isArray(ch.lessons) ? ch.lessons : []
-    lessons.forEach((les, idx) => {
-      db.courseLesson.push({
-        id: nextLessonId,
-        course_id: cid,
-        chapter_id: chapterId,
-        title: les.title || `课时 ${idx + 1}`,
-        duration_sec: Number(les.duration_sec || 0),
-        video_url: les.video_url || '',
-        is_free: Number(les.is_free ?? 0),
-        sort: Number(les.sort ?? idx + 1),
-        created_at: stamp,
-        updated_at: stamp,
+    for (let j = 0; j < lessons.length; j += 1) {
+      const les = lessons[j]
+      // eslint-disable-next-line no-await-in-loop
+      await request.post(`/admin/courses/${cid}/chapters/${chapterId}/lessons`, {
+        title: les.title || `课时 ${j + 1}`,
+        durationSec: Number(les.duration_sec || 0),
+        videoUrl: les.video_url || '',
+        isFree: Number(les.is_free ?? 0),
+        sort: Number(les.sort ?? j + 1),
       })
-      nextLessonId += 1
-    })
-  })
-
-  const course = db.course.find((c) => Number(c.id) === cid)
-  if (course) {
-    course.chapter_count = list.length
-    course.updated_at = stamp
+    }
   }
   return { success: true }
 }
 
-// 配套资料列表。
+// ------- 配套资料：/api/admin/courses/{courseId}/materials -------
 export async function getMaterials(courseId) {
-  await delay()
-  return db.courseMaterial
-    .filter((m) => Number(m.course_id) === Number(courseId))
+  const page = await request.get(`/admin/courses/${courseId}/materials`, {
+    params: { pageNum: 1, pageSize: 100 },
+  })
+  return fromBackendPage(page).list
+    .map((row) => ({
+      id: row.id,
+      course_id: Number(courseId),
+      title: row.title,
+      type: row.type,
+      file_size: row.fileSize,
+      url: row.url,
+      sort: row.sort,
+    }))
     .sort((a, b) => Number(a.sort) - Number(b.sort))
-    .map((m) => ({ ...m }))
 }
 
-// 新增或更新资料。
-export async function saveMaterial(courseId, data) {
-  const cid = Number(courseId)
-  if (data?.id) {
-    return mockApi.update(db.courseMaterial, data.id, { ...data, course_id: cid })
+function toBackendMaterial(data) {
+  return {
+    title: data.title,
+    type: data.type || '',
+    fileSize: data.file_size || data.fileSize || '',
+    url: data.url,
+    sort: Number(data.sort ?? 0),
   }
-  return mockApi.create(db.courseMaterial, { ...data, course_id: cid })
 }
 
-// 删除资料。
-export async function deleteMaterial(id) {
-  return mockApi.remove(db.courseMaterial, id)
+export async function saveMaterial(courseId, data) {
+  if (data?.id) {
+    await request.put(`/admin/courses/${courseId}/materials/${data.id}`, toBackendMaterial(data))
+    return { id: data.id }
+  }
+  const id = await request.post(`/admin/courses/${courseId}/materials`, toBackendMaterial(data))
+  return { id }
+}
+
+// deleteMaterial(id) 历史签名；为兼容视图层，沿用单参数调用。
+// 通过保存一份最近材料所属课程的映射来解决 courseId 缺失的问题。
+const _materialCourseMap = {}
+const _origGetMaterials = getMaterials
+// eslint-disable-next-line no-unused-vars
+async function _cacheMaterials(courseId) {
+  const list = await _origGetMaterials(courseId)
+  list.forEach((m) => { _materialCourseMap[m.id] = courseId })
+  return list
+}
+export async function deleteMaterial(idOrMaterial, courseIdArg) {
+  let id = idOrMaterial
+  let courseId = courseIdArg
+  if (idOrMaterial && typeof idOrMaterial === 'object') {
+    id = idOrMaterial.id
+    courseId = idOrMaterial.course_id ?? idOrMaterial.courseId
+  }
+  courseId = courseId || _materialCourseMap[id]
+  if (!courseId) throw new Error('缺少课程ID，无法删除资料')
+  return request.delete(`/admin/courses/${courseId}/materials/${id}`)
 }

@@ -1,104 +1,95 @@
-import { db } from '@/mock'
-import { delay, mockApi } from './mockApi'
+import request from './request'
+import { fromBackendPage, makeRowMapper, withAliases } from './adapter'
 
-// 根据用户 id 生成稳定的扩展信息（mock 没有建表时用该函数补足详情字段）。
-function buildUserExtra(user) {
-  const id = Number(user?.id || 0)
-  return {
-    gender: id % 3 === 0 ? '女' : '男',
-    birthday: `199${id % 10}-0${(id % 9) + 1}-1${id % 9}`,
-    last_login_at: user?.updated_at || user?.created_at || '',
-  }
+// 用户管理：/api/admin/users
+// 后端：pageNum / pageSize / nickname / phone / status / createdStart / createdEnd
+
+function mapRow(row) {
+  return withAliases(row)
 }
+const rowMapper = makeRowMapper(mapRow)
 
-// 用户列表：支持关键字（昵称/手机/openid）与状态筛选。
 export async function getUserList(params = {}) {
-  const base = await mockApi.crud(db.user, params, {
-    filterFields: ['status'],
-  })
+  const [startAt, endAt] = Array.isArray(params.created_at) ? params.created_at : []
   const keyword = String(params.keyword || '').trim()
-  const rows = keyword
-    ? base.list.filter((item) =>
-      [item.nickname, item.phone, item.openid].some((field) => String(field || '').includes(keyword)))
-    : base.list
-  return { ...base, list: rows }
+  const isPhone = /^\d{3,}$/.test(keyword)
+  const backendParams = {
+    pageNum: params.page || 1,
+    pageSize: params.pageSize || 10,
+    nickname: !isPhone ? (keyword || undefined) : undefined,
+    phone: isPhone ? keyword : undefined,
+    status: params.status === '' || params.status === undefined ? undefined : Number(params.status),
+    createdStart: startAt,
+    createdEnd: endAt,
+  }
+  Object.keys(backendParams).forEach((k) => {
+    if (backendParams[k] === undefined || backendParams[k] === '') delete backendParams[k]
+  })
+  const page = await request.get('/admin/users', { params: backendParams })
+  return fromBackendPage(page, rowMapper)
 }
 
-// 获取用户详情：P0 只返回基础信息字段。
 export async function getUserDetail(id) {
-  const user = await mockApi.findById(db.user, id)
-  if (!user) throw new Error('用户不存在')
-  return { ...user, ...buildUserExtra(user) }
+  const row = await request.get(`/admin/users/${id}`)
+  if (!row) throw new Error('用户不存在')
+  return mapRow(row)
 }
 
-// 封禁用户。
 export async function banUser(id) {
-  return mockApi.update(db.user, id, { status: 0 })
+  return request.patch(`/admin/users/${id}/status`, { status: 0 })
 }
 
-// 解封用户。
 export async function unbanUser(id) {
-  return mockApi.update(db.user, id, { status: 1 })
+  return request.patch(`/admin/users/${id}/status`, { status: 1 })
 }
 
-// 强制下线：mock 里仅保留成功态，便于前端流程联调。
 export async function forceLogout() {
+  // 后端暂未提供强制下线接口；返回成功以兼容前端按钮。
   return { success: true }
 }
 
-// 已购课程：user_course 关联课程标题与进度（由课时完成情况估算）。
-export async function getUserPurchasedCourses(userId) {
-  await delay()
-  const uid = Number(userId)
-  const rows = db.userCourse.filter((uc) => Number(uc.user_id) === uid)
-  return rows.map((uc) => {
-    const course = db.course.find((c) => Number(c.id) === Number(uc.course_id))
-    const lessons = db.courseLesson.filter((l) => Number(l.course_id) === Number(uc.course_id))
-    const progresses = db.lessonProgress.filter(
-      (p) => Number(p.user_id) === uid && Number(p.course_id) === Number(uc.course_id),
-    )
-    const finished = progresses.filter((p) => Number(p.is_finished) === 1).length
-    const total = lessons.length || 1
-    const progress_pct = Math.min(100, Math.round((finished / total) * 100))
-    const lastLearn = progresses.reduce((max, p) => (String(p.updated_at) > String(max) ? p.updated_at : max), '')
-    return {
-      ...uc,
-      course_title: course?.title || '—',
-      progress_pct,
-      last_learn_at: lastLearn || uc.created_at,
-    }
-  })
-}
-
-// 已购资源。
-export async function getUserPurchasedResources(userId) {
-  await delay()
-  const uid = Number(userId)
-  return db.userResource
-    .filter((ur) => Number(ur.user_id) === uid)
-    .map((ur) => {
-      const res = db.resource.find((r) => Number(r.id) === Number(ur.resource_id))
-      return {
-        ...ur,
-        resource_title: res?.title || '—',
-      }
-    })
-}
-
-// 收货地址。
-export async function getUserAddresses(userId) {
-  await delay()
-  return db.userAddress.filter((a) => Number(a.user_id) === Number(userId) && a.deleted_at == null)
-}
-
-// 用户订单列表（管理端）。
+// 用户订单（按 userId 过滤）。直接复用 order.js 的映射以保持枚举一致。
 export async function getUserOrders(userId, params = {}) {
-  await delay()
-  const page = Number(params.page || 1)
-  const pageSize = Number(params.pageSize || 10)
-  let rows = db.order.filter((o) => Number(o.user_id) === Number(userId) && o.deleted_at == null)
-  rows = rows.sort((a, b) => Number(b.id) - Number(a.id))
-  const total = rows.length
-  const list = rows.slice((page - 1) * pageSize, page * pageSize)
-  return { list, total, page, pageSize }
+  const { getOrderList } = await import('./order')
+  return getOrderList({ ...params, user_id: Number(userId) })
+}
+
+// 已购课程：/api/admin/user-courses?userId=xx
+export async function getUserPurchasedCourses(userId) {
+  const res = await request.get('/admin/user-courses', {
+    params: { userId: Number(userId), pageNum: 1, pageSize: 100 },
+  })
+  const normalized = fromBackendPage(res, makeRowMapper((row) => ({
+    ...withAliases(row),
+    user_id: row.userId,
+    course_id: row.courseId,
+    course_title: row.courseTitle,
+    course_cover: row.courseCover,
+    teacher_name: row.teacherName,
+    order_id: row.orderId,
+    progress_pct: 0, // 后端未提供学习进度，占位
+    last_learn_at: row.createdAt,
+  })))
+  return normalized.list
+}
+
+// 已购资源：/api/admin/user-resources?userId=xx
+export async function getUserPurchasedResources(userId) {
+  const res = await request.get('/admin/user-resources', {
+    params: { userId: Number(userId), pageNum: 1, pageSize: 100 },
+  })
+  const normalized = fromBackendPage(res, makeRowMapper((row) => ({
+    ...withAliases(row),
+    user_id: row.userId,
+    resource_id: row.resourceId,
+    resource_title: row.resourceTitle,
+    resource_type: row.resourceType,
+    order_id: row.orderId,
+  })))
+  return normalized.list
+}
+
+// 收货地址：后端未提供“按 userId 查地址”的管理端接口，暂返空。
+export async function getUserAddresses() {
+  return []
 }

@@ -116,14 +116,13 @@ function onSel(rows) {
 }
 
 async function oneCheck(row) {
-  await checkinRegister(row.id)
+  await checkinRegister(row)
   ElMessage.success('已签到')
   tableRef.value?.refresh()
 }
 
 async function batchCheck() {
-  const ids = selection.value.map((r) => r.id)
-  await batchCheckinRegister(ids)
+  await batchCheckinRegister(selection.value)
   ElMessage.success('批量签到完成')
   tableRef.value?.refresh()
 }

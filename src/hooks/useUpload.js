@@ -1,28 +1,34 @@
 import { ref } from 'vue'
+import request from '@/api/request'
 
-// 模拟上传延时，便于观察 loading 交互。
-const MOCK_DELAY = 300
-
-function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-// 生成稳定的 mock 图片地址，避免依赖 blob URL（刷新后会失效）。
-function buildMockUrl(file, folder = 'default') {
-  const seed = encodeURIComponent(`${folder}-${file.name || 'file'}-${Date.now()}`)
-  return `https://picsum.photos/seed/${seed}/600/400`
-}
-
+/**
+ * 文件上传 Hook：对接后端 /api/admin/upload/{image,video,file}
+ * - 根据 file 的 MIME 自动路由到 image / video / file 端点
+ * - 统一返回最终可访问的外链 URL
+ * - 后端默认走百度云 BOS，开发环境未配置时会降级为 mock 模式（仍返回可用链接）
+ */
 export function useUpload() {
   const uploading = ref(false)
+
+  function pickEndpoint(file) {
+    const type = String(file?.type || '')
+    if (type.startsWith('image/')) return '/admin/upload/image'
+    if (type.startsWith('video/')) return '/admin/upload/video'
+    return '/admin/upload/file'
+  }
 
   async function upload(file, folder = 'default') {
     uploading.value = true
     try {
-      // 当前项目采用 Mock 模式，统一返回可持久预览的 picsum 地址。
-      // 后续接入真实接口时，可在这里替换为 request/formData 上传逻辑。
-      await wait(MOCK_DELAY)
-      return buildMockUrl(file, folder)
+      const formData = new FormData()
+      formData.append('file', file)
+      if (folder) formData.append('folder', folder)
+      const endpoint = pickEndpoint(file)
+      const data = await request.post(endpoint, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 60000,
+      })
+      return data?.url || ''
     } finally {
       uploading.value = false
     }

@@ -1,11 +1,13 @@
 import { db } from '@/mock'
 import { delay } from './mockApi'
 
+// 支付流水：后端暂未提供 /api/admin/pay-records 接口，当前保留 Mock。
+// 后续后端接入微信支付回单后可以切换为真实数据源。
 export async function getPayRecordList(params = {}) {
   await delay()
   const page = Number(params.page || 1)
   const pageSize = Number(params.pageSize || 10)
-  let rows = db.payRecord.map((r) => ({
+  let rows = (db.payRecord || []).map((r) => ({
     ...r,
     transaction_id: r.wx_transaction_id || '',
     channel: '微信支付',

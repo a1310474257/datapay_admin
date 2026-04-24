@@ -1,42 +1,57 @@
-import { db } from '@/mock'
-import { mockApi } from './mockApi'
+import request from './request'
+import { fromBackendPage, makeRowMapper, withAliases } from './adapter'
 
-// 讲师列表：支持关键字和状态筛选，默认按 id 倒序。
+// 讲师管理：/api/admin/teachers
+// 后端没有 sort 字段；前端保持展示 intro/brief 兼容历史。
+
+function mapRow(row) {
+  const aliased = withAliases(row)
+  return {
+    ...aliased,
+    brief: row.intro,
+  }
+}
+const rowMapper = makeRowMapper(mapRow)
+
 export async function getTeacherList(params = {}) {
-  const base = await mockApi.crud(db.teacher, { ...params, sort: params.sort || 'id,desc' }, {
-    filterFields: ['status'],
+  const backendParams = {
+    pageNum: params.page || 1,
+    pageSize: params.pageSize || 10,
+    name: params.keyword || params.name || undefined,
+    status: params.status === '' || params.status === undefined ? undefined : Number(params.status),
+  }
+  Object.keys(backendParams).forEach((k) => {
+    if (backendParams[k] === undefined || backendParams[k] === '') delete backendParams[k]
   })
-  const keyword = String(params.keyword || '').trim()
-  const rows = keyword
-    ? base.list.filter((item) =>
-      [item.name, item.title, item.intro, item.brief].some((field) => String(field || '').includes(keyword)))
-    : base.list
-  return { ...base, list: rows }
+  const page = await request.get('/admin/teachers', { params: backendParams })
+  return fromBackendPage(page, rowMapper)
 }
 
-// 新增讲师：兼容 intro/brief 双字段，方便旧数据平滑过渡。
+function toBackendPayload(data = {}) {
+  return {
+    name: data.name,
+    avatar: data.avatar || '',
+    title: data.title || '',
+    intro: data.intro || data.brief || '',
+    status: data.status === undefined ? 1 : Number(data.status),
+  }
+}
+
 export async function createTeacher(data) {
-  const brief = data.brief || data.intro || ''
-  return mockApi.create(db.teacher, {
-    ...data,
-    brief,
-    intro: brief,
-    sort: Number(data.sort || 1),
-  })
+  const id = await request.post('/admin/teachers', toBackendPayload(data))
+  return { id }
 }
 
-// 更新讲师：同步 brief 与 intro，避免列表展示不一致。
 export async function updateTeacher(id, data) {
-  const brief = data.brief || data.intro || ''
-  return mockApi.update(db.teacher, id, {
-    ...data,
-    brief,
-    intro: brief,
-    sort: Number(data.sort || 1),
-  })
+  await request.put(`/admin/teachers/${id}`, toBackendPayload(data))
+  return { id }
 }
 
-// 删除讲师：软删/硬删由 mockApi.remove 内部策略决定。
 export async function deleteTeacher(id) {
-  return mockApi.remove(db.teacher, id)
+  return request.delete(`/admin/teachers/${id}`)
+}
+
+export async function findTeacherById(id) {
+  const row = await request.get(`/admin/teachers/${id}`)
+  return row ? mapRow(row) : null
 }

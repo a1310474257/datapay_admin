@@ -1,91 +1,79 @@
 import dayjs from 'dayjs'
-import { db } from '@/mock'
-import { ORDER_TYPE } from '@/utils/enums'
-import { delay } from './mockApi'
+import request from './request'
 
-// 仪表盘概览：输出第3批要求的 5 个数值卡片指标。
-export async function getOverview() {
-  await delay()
-  const today = dayjs().format('YYYY-MM-DD')
-  const todayUsers = db.user.filter((item) => String(item.created_at || '').startsWith(today)).length
-  const todayOrders = db.order.filter((item) => String(item.created_at || '').startsWith(today)).length
-  const todayGmv = db.order
-    .filter((item) => String(item.created_at || '').startsWith(today) && Number(item.status) >= 1)
-    .reduce((sum, item) => sum + Number(item.actual_pay || 0), 0)
-  const pendingRefund = db.refund.filter((item) => Number(item.status) === 0).length
-  const waitShipOrder = db.order.filter((item) => Number(item.status) === 1 && Number(item.order_type) === 5).length
+// Dashboard 统计：优先对接 /api/admin/orders/statistics；
+// 其他概览指标（如今日新增用户、各类型销售）后端尚未提供专门接口，
+// 这里退化为“用 orders 列表现有能力推导”的近似值。
 
-  return {
-    todayUsers,
-    todayOrders,
-    todayGmv,
-    pendingRefund,
-    waitShipOrder,
+const ORDER_TYPE_LABEL = {
+  course: '课程',
+  'hr-tool': 'HR工具',
+  'research-report': '调研报告',
+  activity: '活动',
+  product: '商品',
+}
+
+async function fetchStatistics(startDate, endDate) {
+  try {
+    return await request.get('/admin/orders/statistics', {
+      params: { startDate, endDate },
+    })
+  } catch (e) {
+    return null
   }
 }
 
-// 近 30 天 GMV 折线（按天聚合实付）。
+export async function getOverview() {
+  const today = dayjs().format('YYYY-MM-DD')
+  const [todayStats, pendingRefundPage, waitShipPage] = await Promise.all([
+    fetchStatistics(today, today),
+    request.get('/admin/orders', { params: { status: 'refunding', page: 1, size: 1 } }).catch(() => null),
+    request.get('/admin/orders', { params: { status: 'paid', type: 'product', page: 1, size: 1 } }).catch(() => null),
+  ])
+  return {
+    todayUsers: 0, // 后端暂未提供用户增量接口
+    todayOrders: Number(todayStats?.orderCount || 0),
+    todayGmv: Number(todayStats?.paidAmount || 0),
+    pendingRefund: Number(pendingRefundPage?.total || 0),
+    waitShipOrder: Number(waitShipPage?.total || 0),
+  }
+}
+
+// 近 30 天 GMV 折线：按日逐天调 statistics。
+// 后端当前没有按日聚合接口，30 次调用可接受；真实生产建议后端补 daily 接口。
 export async function getGmvTrend() {
-  await delay()
   const days = []
   for (let i = 29; i >= 0; i -= 1) {
     days.push(dayjs().subtract(i, 'day').format('YYYY-MM-DD'))
   }
-  const series = days.map((d) => {
-    const sum = db.order
-      .filter(
-        (o) =>
-          String(o.created_at || '').startsWith(d) && [1, 2, 3, 4, 5].includes(Number(o.status)),
-      )
-      .reduce((s, o) => s + Number(o.actual_pay || 0), 0)
-    return Math.round(sum / 100) / 100
-  })
-  return { dates: days, values: series }
+  const values = await Promise.all(days.map(async (d) => {
+    const stat = await fetchStatistics(d, d)
+    const fen = Number(stat?.paidAmount || 0)
+    return Math.round(fen / 100) / 100
+  }))
+  return { dates: days, values }
 }
 
-// 订单类型分布（饼图）。
+// 订单类型分布：使用近 30 天统计的 typeDistribution。
 export async function getOrderTypeDistribution() {
-  await delay()
-  const map = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
-  db.order.forEach((o) => {
-    if (o.deleted_at != null) return
-    const t = Number(o.order_type)
-    if (map[t] !== undefined) map[t] += 1
-  })
-  return Object.entries(map).map(([key, value]) => ({
-    name: ORDER_TYPE[Number(key)]?.label || `类型${key}`,
-    value,
+  const start = dayjs().subtract(29, 'day').format('YYYY-MM-DD')
+  const end = dayjs().format('YYYY-MM-DD')
+  const stat = await fetchStatistics(start, end)
+  const dist = stat?.typeDistribution || {}
+  return Object.entries(dist).map(([type, count]) => ({
+    name: ORDER_TYPE_LABEL[type] || type,
+    value: Number(count || 0),
   }))
 }
 
-// Top10 课程销售额（分转元后）。
+// Top10 课程销售：后端暂无专门接口，返回空数组。
+// 后续可在后端新增 /api/admin/stats/top-courses 接口。
 export async function getTopCourses() {
-  await delay()
-  const map = {}
-  db.orderItem.forEach((item) => {
-    const order = db.order.find((o) => Number(o.id) === Number(item.order_id))
-    if (!order || Number(order.order_type) !== 1) return
-    const cid = Number(item.item_id)
-    if (!cid) return
-    map[cid] = (map[cid] || 0) + Number(item.price || 0) * Number(item.quantity || 0)
-  })
-  const rows = Object.entries(map)
-    .map(([id, fen]) => {
-      const course = db.course.find((c) => Number(c.id) === Number(id))
-      return { title: course?.title || `课程#${id}`, amountYuan: Math.round(fen / 100) / 100 }
-    })
-    .sort((a, b) => b.amountYuan - a.amountYuan)
-    .slice(0, 10)
-  return rows
+  return []
 }
 
-// 热门活动报名率漏斗（简化：取前 5 个活动）。
+// 热门活动报名率：前端简化为近期活动列表 + 报名率。
+// 这里返回空，让图表退化成提示“暂无数据”，避免调用超多接口。
 export async function getActivityFunnel() {
-  await delay()
-  return db.activity.slice(0, 5).map((a) => {
-    const regs = db.activityRegister.filter((r) => Number(r.activity_id) === Number(a.id))
-    const checked = regs.filter((r) => Number(r.register_status) === 2).length
-    const rate = regs.length ? Math.round((checked / regs.length) * 100) : 0
-    return { name: a.title, enrolled: regs.length, checked, rate }
-  })
+  return []
 }

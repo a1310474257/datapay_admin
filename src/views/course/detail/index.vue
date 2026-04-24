@@ -302,7 +302,7 @@ async function submitMaterial() {
 async function removeMaterial(row) {
   try {
     await ElMessageBox.confirm('确认删除该资料？', '提示', { type: 'warning' })
-    await deleteMaterial(row.id)
+    await deleteMaterial(row.id, route.params.id)
     ElMessage.success('已删除')
     matTableRef.value?.refresh()
   } catch (e) {
