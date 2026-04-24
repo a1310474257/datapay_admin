@@ -1,27 +1,21 @@
-import { db } from '@/mock'
-import { delay } from './mockApi'
+import request from './request'
 
-// 更新个人信息：mock 中只更新 adminUser 首条记录。
+/**
+ * 更新当前管理员昵称/头像。
+ * 对应后端 PUT /api/admin/auth/me
+ * @param {{ nickname?: string, avatar?: string }} payload
+ * @returns {Promise<AdminInfoVO>}
+ */
 export async function updateProfile(payload = {}) {
-  await delay()
-  const admin = db.adminUser[0]
-  if (!admin) throw new Error('管理员信息不存在')
-  admin.nickname = payload.nickname || admin.nickname
-  admin.avatar = payload.avatar || admin.avatar || ''
-  return {
-    id: admin.id,
-    username: admin.username,
-    nickname: admin.nickname,
-    avatar: admin.avatar || '',
-    role: '超级管理员',
-  }
+  return request.put('/api/admin/auth/me', payload)
 }
 
-// 修改密码：按文档要求只校验旧密码是否为 admin。
+/**
+ * 修改当前管理员密码。
+ * 对应后端 POST /api/admin/auth/change-password
+ * @param {{ oldPassword: string, newPassword: string }} payload
+ * @returns {Promise<void>}
+ */
 export async function changePassword(payload = {}) {
-  await delay()
-  if (payload.oldPassword !== 'admin') {
-    throw new Error('原密码错误')
-  }
-  return { success: true }
+  return request.post('/api/admin/auth/change-password', payload)
 }
