@@ -7,7 +7,7 @@ import request from './request'
  * @returns {Promise<AdminInfoVO>}
  */
 export async function updateProfile(payload = {}) {
-  return request.put('/api/admin/auth/me', payload)
+  return request.put('/admin/auth/me', payload)
 }
 
 /**
@@ -17,5 +17,5 @@ export async function updateProfile(payload = {}) {
  * @returns {Promise<void>}
  */
 export async function changePassword(payload = {}) {
-  return request.post('/api/admin/auth/change-password', payload)
+  return request.post('/admin/auth/change-password', payload)
 }

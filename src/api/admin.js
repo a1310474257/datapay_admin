@@ -10,7 +10,7 @@ import request from './request'
  */
 export async function login({ username, password }) {
   // 后端返回 AdminLoginVO: { token, expiration, adminInfo }
-  const data = await request.post('/api/admin/auth/login', { username, password })
+  const data = await request.post('/admin/auth/login', { username, password })
   return data.token
 }
 
@@ -19,7 +19,7 @@ export async function login({ username, password }) {
  * @returns {Promise<object>} AdminInfoVO + permissions 数组
  */
 export async function getMyProfile() {
-  const data = await request.get('/api/admin/auth/me')
+  const data = await request.get('/admin/auth/me')
   // AdminInfoVO 没有 permissions 字段，按 role 全量授权
   // ROLE_SUPER / ROLE_ADMIN 均视为全权限（后台是内部系统）
   return {
