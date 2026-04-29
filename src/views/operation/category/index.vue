@@ -11,19 +11,9 @@
       ref="tableRef"
       :columns="columns"
       :load-data="loadData"
-      :default-sort="{ prop: 'sort', order: 'ascending' }"
     >
       <template #toolbar-left>
         <el-button v-permission="'category:create'" type="primary" @click="openCreateDialog">新建分类</el-button>
-      </template>
-
-      <template #icon="{ row }">
-        <el-image
-          :src="row.icon"
-          fit="cover"
-          style="width: 42px; height: 42px; border-radius: 6px"
-          preview-teleported
-        />
       </template>
 
       <template #actions="{ row }">
@@ -48,14 +38,6 @@
       >
         <el-form-item label="分类名称" prop="name">
           <el-input v-model="formModel.name" placeholder="请输入分类名称" />
-        </el-form-item>
-
-        <el-form-item label="分类图标" prop="icon">
-          <UploadImage
-            v-model="formModel.icon"
-            folder="category"
-            ratio="1:1"
-          />
         </el-form-item>
 
         <el-form-item label="业务类型" prop="business_type">
@@ -99,7 +81,6 @@ import { computed, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import SearchForm from '@/components/SearchForm/index.vue'
 import ProTable from '@/components/ProTable/index.vue'
-import UploadImage from '@/components/UploadImage/index.vue'
 import { CATEGORY_BUSINESS_TYPE, STATUS_ENABLE } from '@/utils/enums'
 import { createCategory, deleteCategory, getCategoryList, updateCategory } from '@/api/category'
 import { useTable } from '@/hooks/useTable'
@@ -137,13 +118,12 @@ const searchSchema = [
 ]
 
 const columns = [
-  { prop: 'id', label: 'ID', width: 80, sortable: true },
+  { prop: 'id', label: 'ID', width: 80 },
   { prop: 'name', label: '分类名称', minWidth: 150 },
-  { prop: 'icon', label: '图标', width: 100, slot: 'icon' },
   { prop: 'business_type', label: '业务类型', width: 120, dict: CATEGORY_BUSINESS_TYPE },
-  { prop: 'sort', label: '排序', width: 100, sortable: true },
+  { prop: 'sort', label: '排序', width: 100 },
   { prop: 'status', label: '状态', width: 100, dict: STATUS_ENABLE },
-  { prop: 'created_at', label: '创建时间', minWidth: 170, sortable: true },
+  { prop: 'created_at', label: '创建时间', minWidth: 170 },
   { prop: 'actions', label: '操作', width: 150, fixed: 'right', slot: 'actions' },
 ]
 
@@ -155,7 +135,6 @@ const formRef = ref()
 const emptyForm = () => ({
   id: undefined,
   name: '',
-  icon: '',
   business_type: 1,
   sort: 1,
   status: 1,
@@ -165,7 +144,6 @@ const formModel = reactive(emptyForm())
 
 const formRules = {
   name: [{ required: true, message: '请输入分类名称', trigger: 'blur' }],
-  icon: [{ required: true, message: '请上传分类图标', trigger: 'change' }],
   business_type: [{ required: true, message: '请选择业务类型', trigger: 'change' }],
   sort: [{ required: true, message: '请输入排序值', trigger: 'change' }],
 }
@@ -197,7 +175,6 @@ function openEditDialog(row) {
   Object.assign(formModel, {
     id: row.id,
     name: row.name,
-    icon: row.icon,
     business_type: row.business_type || 1,
     sort: row.sort || 1,
     status: Number(row.status ?? 1),
@@ -213,7 +190,6 @@ async function handleSubmit() {
   try {
     const payload = {
       name: formModel.name,
-      icon: formModel.icon,
       business_type: formModel.business_type,
       sort: formModel.sort,
       status: formModel.status,
