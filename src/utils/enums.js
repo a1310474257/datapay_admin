@@ -17,9 +17,9 @@ export const USER_STATUS = {
 
 export const BANNER_TYPE = {
   1: { label: '课程' },
-  2: { label: '活动' },
+  2: { label: '资源' },
   3: { label: '商品' },
-  4: { label: 'HR工具' },
+  4: { label: '活动' },
 }
 
 export const RESOURCE_TYPE = {

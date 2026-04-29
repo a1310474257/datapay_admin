@@ -51,6 +51,14 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  /**
+   * 为 true 时上传后返回 objectKey，并通过 /api/file/{objectKey} 进行预览。
+   * 适用于受保护文件访问场景（需登录/鉴权的中转下载）。
+   */
+  useObjectKey: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -59,10 +67,18 @@ const { upload } = useUpload()
 const previewVisible = ref(false)
 const previewUrl = ref('')
 
+function resolveImageUrl(value) {
+  if (!value) return ''
+  if (/^https?:\/\//i.test(value) || value.startsWith('data:')) return value
+  if (value.startsWith('image/')) return `/api/file/image?key=${value}`
+  return `/api/file/${encodeURIComponent(value)}`
+}
+
 // 根据外部值回显文件列表，保持 Upload 组件与 v-model 同步。
 const fileList = computed(() => {
   if (!props.modelValue) return []
-  return [{ name: 'image', url: props.modelValue }]
+  const name = decodeURIComponent(props.modelValue.split('/').pop() || 'image')
+  return [{ name, url: resolveImageUrl(props.modelValue) }]
 })
 
 function beforeUpload(file) {
@@ -83,8 +99,8 @@ async function handleChange(file) {
   if (!file?.raw) return
   if (!beforeUpload(file.raw)) return
   try {
-    const url = await upload(file.raw, props.folder)
-    emit('update:modelValue', url)
+    const value = await upload(file.raw, props.folder, { returnObjectKey: props.useObjectKey })
+    emit('update:modelValue', value)
   } catch (error) {
     ElMessage.error(error?.message || '上传失败')
   }
@@ -95,7 +111,7 @@ function handleRemove() {
 }
 
 function handlePreview(file) {
-  previewUrl.value = file.url || props.modelValue
+  previewUrl.value = file.url || resolveImageUrl(props.modelValue)
   previewVisible.value = true
 }
 

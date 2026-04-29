@@ -8,10 +8,50 @@ function mapRow(row) {
   return {
     ...withAliases(row),
     target_id: row.targetId ?? row.target_id,
+    resource_type: row.resourceType ?? row.resource_type ?? null,
     target_title: '', // 后端未返回关联标题，候选列表里可从 searchBannerTargets 获取
   }
 }
 const rowMapper = makeRowMapper(mapRow)
+
+/**
+ * 根据轮播类型与目标ID请求详情接口，兜底获取目标标题。
+ * 说明：
+ * 1. 后端 Banner 列表当前未返回 targetTitle；
+ * 2. 前端列表展示需要目标名称，因此在列表接口后追加一次按行补全；
+ * 3. 任意一条补全失败时静默降级，避免影响主列表渲染。
+ */
+async function fetchTargetTitleByRow(row) {
+  const type = Number(row.type)
+  const targetId = Number(row.target_id ?? row.targetId)
+  if (!type || !targetId) return ''
+  let detailUrl = ''
+  if (type === 1) {
+    detailUrl = `/admin/courses/${targetId}`
+  } else if (type === 2) {
+    detailUrl = `/admin/resources/${targetId}`
+  } else if (type === 3) {
+    detailUrl = `/admin/products/${targetId}`
+  } else if (type === 4) {
+    detailUrl = `/admin/activities/${targetId}`
+  } else {
+    return ''
+  }
+  const detail = await request.get(detailUrl).catch(() => null)
+  return detail?.title || detail?.name || ''
+}
+
+async function fillBannerTargetTitles(list = []) {
+  const tasks = list.map(async (row) => {
+    if (row.target_title) return row
+    const targetTitle = await fetchTargetTitleByRow(row)
+    return {
+      ...row,
+      target_title: targetTitle,
+    }
+  })
+  return Promise.all(tasks)
+}
 
 export async function getBannerList(params = {}) {
   const backendParams = {
@@ -25,14 +65,23 @@ export async function getBannerList(params = {}) {
     if (backendParams[k] === undefined || backendParams[k] === '') delete backendParams[k]
   })
   const page = await request.get('/admin/banners', { params: backendParams })
-  return fromBackendPage(page, rowMapper)
+  const normalized = fromBackendPage(page, rowMapper)
+  const list = await fillBannerTargetTitles(normalized.list || [])
+  return {
+    ...normalized,
+    list,
+  }
 }
 
 function toBackendPayload(data = {}) {
+  const type = Number(data.type)
+  const rawResourceType = data.resource_type ?? data.resourceType
   return {
     image: data.image,
-    type: Number(data.type),
+    type,
     targetId: Number(data.target_id ?? data.targetId ?? 0),
+    // 仅在“资源”类型下提交 resourceType，避免污染其他类型参数
+    resourceType: type === 2 && rawResourceType !== null && rawResourceType !== undefined ? Number(rawResourceType) : undefined,
     title: data.title || '',
     sort: Number(data.sort ?? 0),
     status: data.status === undefined ? 1 : Number(data.status),
@@ -59,28 +108,30 @@ export async function findBannerById(id) {
 }
 
 // 目标候选：根据类型分别调对应的 admin 列表接口。
-// type: 1-课程 2-活动 3-商品 4-HR工具（resource type=1）
+// type: 1-课程 2-资源 3-商品 4-活动
 export async function searchBannerTargets(type, params = {}) {
   const keyword = params.keyword || ''
   const page = params.page || 1
   const pageSize = params.pageSize || 10
+  const resourceType = params.resourceType === undefined ? undefined : Number(params.resourceType)
   const t = Number(type)
   let url
   const query = { page, size: pageSize, keyword }
   if (t === 1) {
     url = '/admin/courses'
   } else if (t === 2) {
+    // 资源列表支持传 resourceType（1-HR工具 2-调研报告）
+    url = '/admin/resources'
+    query.resourceType = resourceType
+  } else if (t === 3) {
+    url = '/admin/products'
+  } else if (t === 4) {
     url = '/admin/activities'
     // 活动接口使用 pageNum/pageSize
     delete query.page
     delete query.size
     query.pageNum = page
     query.pageSize = pageSize
-  } else if (t === 3) {
-    url = '/admin/products'
-  } else if (t === 4) {
-    url = '/admin/resources'
-    query.resourceType = 1
   } else {
     return { list: [], total: 0, page, pageSize }
   }

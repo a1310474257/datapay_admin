@@ -35,8 +35,10 @@ const id = defineModel('id', { type: [Number, String], default: null })
 const title = defineModel('title', { type: String, default: '' })
 
 const props = defineProps({
-  /** 1 课程 2 活动 3 商品 4 HR工具 */
+  /** 1-课程 2-资源 3-商品 4-活动 */
   type: { type: Number, required: true },
+  /** 资源子类型：1-HR工具 2-调研报告，仅在 type=2 时生效 */
+  resourceType: { type: [Number, null], default: null },
 })
 
 const visible = ref(false)
@@ -47,13 +49,15 @@ const page = ref(1)
 const pageSize = ref(10)
 
 const dialogTitle = computed(() => {
-  const map = { 1: '选择课程', 2: '选择活动', 3: '选择商品', 4: '选择 HR 工具资源' }
+  const resourceTitleMap = { 1: '选择 HR 工具', 2: '选择调研报告' }
+  const map = { 1: '选择课程', 2: resourceTitleMap[Number(props.resourceType)] || '选择资源', 3: '选择商品', 4: '选择活动' }
   return map[props.type] || '选择目标'
 })
 
 watch(
-  () => props.type,
+  () => [props.type, props.resourceType],
   () => {
+    // 类型或资源子类型变化后，已选目标可能失效，统一清空避免错绑
     id.value = null
     title.value = ''
   },
@@ -74,6 +78,7 @@ async function load() {
     keyword: keyword.value,
     page: page.value,
     pageSize: pageSize.value,
+    resourceType: props.resourceType,
   })
   list.value = res.list || []
   total.value = res.total || 0

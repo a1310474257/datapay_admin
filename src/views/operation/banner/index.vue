@@ -11,7 +11,7 @@
         <el-button v-permission="'banner:create'" type="primary" @click="openDialog()">新建轮播</el-button>
       </template>
       <template #image="{ row }">
-        <el-image :src="row.image" style="width: 120px; height: 40px; border-radius: 4px" />
+        <el-image :src="resolveBannerImage(row.image)" style="width: 120px; height: 40px; border-radius: 4px" />
       </template>
       <template #type="{ row }">
         <span>{{ BANNER_TYPE[row.type]?.label }}</span>
@@ -30,7 +30,7 @@
     <el-dialog v-model="visible" :title="form.id ? '编辑轮播' : '新建轮播'" width="560px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="图片 3:1" prop="image">
-          <UploadImage v-model="form.image" folder="banner" ratio="3:1" />
+          <UploadImage v-model="form.image" folder="banner" ratio="3:1" use-object-key />
         </el-form-item>
         <el-form-item label="标题" prop="title">
           <el-input v-model="form.title" />
@@ -40,8 +40,18 @@
             <el-option v-for="(item, key) in BANNER_TYPE" :key="key" :label="item.label" :value="Number(key)" />
           </el-select>
         </el-form-item>
+        <el-form-item v-if="Number(form.type) === 2" label="资源类型" prop="resource_type">
+          <el-select v-model="form.resource_type" placeholder="请选择资源类型" @change="onResourceTypeChange">
+            <el-option v-for="(item, key) in RESOURCE_TYPE" :key="key" :label="item.label" :value="Number(key)" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="跳转目标" prop="target_id">
-          <TargetPicker v-model:id="form.target_id" v-model:title="targetTitle" :type="Number(form.type)" />
+          <TargetPicker
+            v-model:id="form.target_id"
+            v-model:title="targetTitle"
+            :type="Number(form.type)"
+            :resource-type="form.resource_type"
+          />
         </el-form-item>
         <el-form-item label="排序" prop="sort">
           <el-input-number v-model="form.sort" :min="1" :max="9999" />
@@ -65,7 +75,7 @@ import SearchForm from '@/components/SearchForm/index.vue'
 import ProTable from '@/components/ProTable/index.vue'
 import UploadImage from '@/components/UploadImage/index.vue'
 import TargetPicker from '@/components/TargetPicker/index.vue'
-import { BANNER_TYPE, STATUS_ENABLE } from '@/utils/enums'
+import { BANNER_TYPE, RESOURCE_TYPE, STATUS_ENABLE } from '@/utils/enums'
 import { createBanner, deleteBanner, getBannerList, updateBanner } from '@/api/banner'
 import { useTable } from '@/hooks/useTable'
 
@@ -107,6 +117,7 @@ const form = reactive({
   image: '',
   title: '',
   type: 1,
+  resource_type: null,
   target_id: null,
   sort: 1,
   status: 1,
@@ -115,6 +126,19 @@ const form = reactive({
 const rules = {
   image: [{ required: true, message: '请上传图片', trigger: 'change' }],
   title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
+  resource_type: [
+    {
+      validator: (_rule, value, callback) => {
+        // 仅资源类型需要强制选择 resource_type，其他类型直接放行
+        if (Number(form.type) === 2 && !value) {
+          callback(new Error('请选择资源类型'))
+          return
+        }
+        callback()
+      },
+      trigger: 'change',
+    },
+  ],
   target_id: [{ required: true, message: '请选择跳转目标', trigger: 'change' }],
 }
 
@@ -122,7 +146,25 @@ function handleSearchModelUpdate(value) {
   Object.assign(searchParams, value || {})
 }
 
+function resolveBannerImage(value) {
+  if (!value) return ''
+  if (/^https?:\/\//i.test(value) || value.startsWith('data:')) return value
+  // 轮播图改为存 objectKey，列表展示通过文件中转下载接口查看
+  if (value.startsWith('image/')) return `/api/file/image?key=${value}`
+  return `/api/file/${encodeURIComponent(value)}`
+}
+
 function onTypeChange() {
+  // 切换主类型后，旧的目标和资源子类型都可能不匹配，统一清空
+  if (Number(form.type) !== 2) {
+    form.resource_type = null
+  }
+  form.target_id = null
+  targetTitle.value = ''
+}
+
+function onResourceTypeChange() {
+  // 资源子类型变化后，目标列表范围变化，需清空已选目标
   form.target_id = null
   targetTitle.value = ''
 }
@@ -134,6 +176,7 @@ function openDialog(row) {
       image: row.image,
       title: row.title,
       type: row.type,
+      resource_type: row.resource_type ?? null,
       target_id: row.target_id,
       sort: row.sort,
       status: row.status,
@@ -145,6 +188,7 @@ function openDialog(row) {
       image: '',
       title: '',
       type: 1,
+      resource_type: null,
       target_id: null,
       sort: 1,
       status: 1,
