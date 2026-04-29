@@ -55,9 +55,11 @@
           </el-select>
         </el-form-item>
         <el-form-item label="主文件" prop="file_url">
-          <UploadFile v-model="form.file_url" />
+          <!-- use-object-key：上传后存 objectKey 而非公开 URL，后端经 /api/file/{objectKey} 代理下载 -->
+          <UploadFile v-model="form.file_url" use-object-key />
         </el-form-item>
         <el-form-item label="预览文件" prop="preview_url">
+          <!-- 预览文件公开可访问，存完整 URL 即可 -->
           <UploadFile v-model="form.preview_url" accept=".pdf" />
         </el-form-item>
         <el-form-item label="预览页数" prop="preview_pages">

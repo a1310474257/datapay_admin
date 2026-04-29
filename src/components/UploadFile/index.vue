@@ -36,6 +36,15 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  /**
+   * 为 true 时上传成功后向父组件 emit objectKey（BOS 对象路径，不含 host），
+   * 用于受保护文件（资源正文等）——后端通过 /api/file/{objectKey} 代理下载。
+   * 为 false（默认）时 emit 完整公开 URL，适用于封面图、预览文件等公开资源。
+   */
+  useObjectKey: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits(['update:modelValue', 'meta-extracted'])
@@ -44,7 +53,10 @@ const { uploading, upload } = useUpload()
 const fileList = computed(() => {
   if (!props.modelValue) return []
   const name = decodeURIComponent(props.modelValue.split('/').pop() || 'file')
-  return [{ name, url: props.modelValue }]
+  // useObjectKey 模式下 modelValue 是 objectKey，不是可访问的 URL，
+  // 不传 url 字段以避免 Element Plus 渲染无效的预览链接。
+  const url = props.useObjectKey ? undefined : props.modelValue
+  return [{ name, url }]
 })
 
 function beforeUpload(file) {
@@ -81,8 +93,8 @@ async function handleChange(file) {
   if (!file?.raw) return
   if (!beforeUpload(file.raw)) return
   try {
-    const url = await upload(file.raw, 'file')
-    emit('update:modelValue', url)
+    const value = await upload(file.raw, 'file', { returnObjectKey: props.useObjectKey })
+    emit('update:modelValue', value)
 
     // 仅在开启配置且为视频文件时，向外抛出时长等元信息。
     if (props.autoExtractMeta && String(file.raw.type).startsWith('video/')) {
