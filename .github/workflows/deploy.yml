@@ -1,0 +1,88 @@
+# =====================================================================
+# DataPay Admin - GitHub Actions 自动部署流水线
+# ---------------------------------------------------------------------
+# 触发条件：push 到 main 分支 / 手动触发
+# 执行位置：自托管 Runner（国内云服务器）
+#
+# 注意：admin 的 docker compose 定义在 datapay_server/ 仓库中。
+# Runner 上需同时 clone 了 datapay_server，路径为
+#   /opt/datapay/datapay_server/
+# admin 镜像构建时通过 ../datapay_admin 相对路径引用本仓库代码。
+# =====================================================================
+
+name: Deploy Admin
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: '手动触发部署原因'
+        required: false
+        default: '手动触发'
+
+concurrency:
+  group: deploy-admin
+  cancel-in-progress: false
+
+env:
+  # datapay_server 仓库在 runner 上的路径（docker compose 在这里）
+  SERVER_REPO_PATH: /opt/datapay/datapay_server
+
+jobs:
+  deploy:
+    name: 构建并部署 datapay-admin
+    runs-on: self-hosted
+    timeout-minutes: 20
+
+    steps:
+      - name: 检出 admin 代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: 显示部署信息
+        run: |
+          echo "==========================================="
+          echo "  Branch : ${{ github.ref_name }}"
+          echo "  Commit : ${{ github.sha }}"
+          echo "  Author : ${{ github.actor }}"
+          echo "==========================================="
+
+      - name: 构建 admin 镜像
+        # admin 的 Dockerfile 在本仓库，但 docker compose 在 server 仓库中
+        # 直接在本仓库目录执行 docker build
+        run: |
+          docker build \
+            --tag datapay/datapay-admin:latest \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            .
+
+      - name: 重启 datapay-admin 容器
+        working-directory: ${{ env.SERVER_REPO_PATH }}
+        run: |
+          docker compose --profile admin up -d --no-deps --wait datapay-admin
+
+      - name: 等待健康检查通过
+        run: |
+          for i in $(seq 1 18); do
+            STATUS=$(docker inspect --format='{{.State.Health.Status}}' datapay-admin 2>/dev/null || echo "unknown")
+            echo "[$i/18] 健康状态: $STATUS"
+            if [ "$STATUS" = "healthy" ]; then
+              echo "✅ datapay-admin 健康检查通过"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "❌ 健康检查超时，打印最新日志："
+          docker logs --tail=50 datapay-admin
+          exit 1
+
+      - name: 清理悬空镜像
+        run: docker image prune -f
+
+      - name: 部署失败：打印日志
+        if: failure()
+        run: docker logs --tail=100 datapay-admin || true
