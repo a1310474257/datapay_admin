@@ -1,12 +1,5 @@
 <template>
   <div class="dp-pay-record">
-    <el-alert
-      type="info"
-      title="数据为 Mock：后端暂未提供支付流水查询接口，后续接入真实微信支付回单后会切换"
-      :closable="false"
-      show-icon
-      style="margin-bottom: 12px;"
-    />
     <SearchForm
       :model-value="searchParams"
       :schema="searchSchema"

@@ -12,11 +12,6 @@
             <el-badge :value="badge1" :hidden="badge1 === 0" :max="99">已通过</el-badge>
           </template>
         </el-tab-pane>
-        <el-tab-pane name="2">
-          <template #label>
-            <el-badge :value="badge2" :hidden="badge2 === 0" :max="99">已拒绝</el-badge>
-          </template>
-        </el-tab-pane>
       </el-tabs>
     </el-card>
 
@@ -94,7 +89,6 @@ const route = useRoute()
 const activeTab = ref('0')
 const badge0 = ref(0)
 const badge1 = ref(0)
-const badge2 = ref(0)
 
 const { tableRef, searchParams, loadData, onSearch } = useTable({
   loadApi: getRefundList,
@@ -138,14 +132,12 @@ function onTab(name) {
 }
 
 async function loadBadges() {
-  const [a, b, c] = await Promise.all([
+  const [a, b] = await Promise.all([
     getRefundList({ status: '0', page: 1, pageSize: 1 }),
     getRefundList({ status: '1', page: 1, pageSize: 1 }),
-    getRefundList({ status: '2', page: 1, pageSize: 1 }),
   ])
   badge0.value = a.total
   badge1.value = b.total
-  badge2.value = c.total
 }
 
 async function openDetail(row) {

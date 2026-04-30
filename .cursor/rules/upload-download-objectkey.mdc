@@ -1,0 +1,67 @@
+---
+description: 文件上传下载统一规范（objectKey 模式）
+globs:
+  - "src/**/*.{js,ts,vue}"
+alwaysApply: true
+---
+
+# 文件上传下载统一规范（必须遵守）
+
+## 目标
+
+全项目统一采用“上传返回 objectKey、业务字段落库 objectKey、访问走后端 `/api/file` 中转”的模式，禁止在业务表持久化公网直链 URL（除明确标注为公开展示字段的例外）。
+
+## 一、上传阶段规范
+
+1. 上传组件统一使用 `useUpload`（`src/hooks/useUpload.js`）。
+2. 所有业务持久化字段（如资源正文、课程视频、资料文件、轮播图、封面图等）默认使用 objectKey：
+   - 组件侧传 `use-object-key`（`UploadImage` / `UploadFile`）
+   - 或调用 `upload(file, folder, { returnObjectKey: true })`
+3. 上传接口按 MIME 自动分流：
+   - 图片：`/api/admin/upload/image`
+   - 视频：`/api/admin/upload/video`
+   - 其他：`/api/admin/upload/file`
+4. 提交保存时，payload 中对应字段必须传 objectKey（例如 `image`、`cover`、`fileUrl`、`videoUrl`、`url` 等）。
+
+## 二、下载/预览阶段规范
+
+1. 前端展示文件时，禁止直接假设字段是公网 URL。
+2. 必须通过统一解析函数将字段值转为可访问地址（建议复用 `src/utils/mediaUrl.js`）：
+   - `http(s)` / `data:`：原样返回
+   - `image/*` objectKey：`/api/file/image?key={objectKey}`
+   - 其他 objectKey：`/api/file/{encodeURIComponent(objectKey)}`
+3. 所有 `el-image`、下载链接、预览链接、视频播放地址都必须先经过该解析。
+
+## 三、兼容性要求（新旧数据共存）
+
+1. 历史数据可能是公网 URL，新数据是 objectKey；代码必须同时兼容。
+2. 不允许因切换 objectKey 模式导致旧数据不可预览/下载。
+3. 新增代码不得再把 objectKey 转换成公网 URL 后落库。
+
+## 四、组件使用约束
+
+1. `UploadImage`：业务字段落库时必须加 `use-object-key`。
+2. `UploadFile`：业务字段落库时必须加 `use-object-key`。
+3. 只有明确“公开外链字段”且有业务说明时，才允许不使用 `use-object-key`。
+
+## 五、API 层约束
+
+1. `src/api/*.js` 的 `toBackendPayload` 中，文件类字段优先传 objectKey。
+2. 列表/详情返回字段用于展示时，视图层必须走统一解析函数生成 `/api/file/...` 地址。
+3. 不得在 API 层硬编码对象存储公网域名。
+
+## 六、代码生成检查清单（每次涉及上传下载都要自检）
+
+- [ ] 上传是否开启 objectKey 模式（`use-object-key` / `returnObjectKey: true`）
+- [ ] 提交 payload 是否传 objectKey（非公网 URL）
+- [ ] 展示/下载是否统一走 `/api/file/...` 解析
+- [ ] 是否兼容历史 URL + 新 objectKey 双形态
+- [ ] 是否避免硬编码存储厂商域名
+
+## 七、参考实现
+
+- 规范参考文档：`doc/首页轮播图上传下载模式说明.md`
+- 上传逻辑：`src/hooks/useUpload.js`
+- 图片上传组件：`src/components/UploadImage/index.vue`
+- 文件上传组件：`src/components/UploadFile/index.vue`
+- 媒体地址解析：`src/utils/mediaUrl.js`

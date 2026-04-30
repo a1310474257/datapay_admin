@@ -109,6 +109,8 @@ export async function findBannerById(id) {
 
 // 目标候选：根据类型分别调对应的 admin 列表接口。
 // type: 1-课程 2-资源 3-商品 4-活动
+// 注意：各列表 Query 参数不一致（课程用 pageNum/pageSize/title，资源/商品用 page/size/keyword，
+// 活动用 pageNum/pageSize/keyword），需与各模块 api 保持一致。
 export async function searchBannerTargets(type, params = {}) {
   const keyword = params.keyword || ''
   const page = params.page || 1
@@ -116,22 +118,32 @@ export async function searchBannerTargets(type, params = {}) {
   const resourceType = params.resourceType === undefined ? undefined : Number(params.resourceType)
   const t = Number(type)
   let url
-  const query = { page, size: pageSize, keyword }
+  /** @type {Record<string, unknown>} */
+  let query = {}
   if (t === 1) {
+    // 与 src/api/course.js getCourseList 一致（CourseQueryDTO）
     url = '/admin/courses'
+    query = {
+      pageNum: page,
+      pageSize,
+      ...(keyword ? { title: keyword } : {}),
+    }
   } else if (t === 2) {
-    // 资源列表支持传 resourceType（1-HR工具 2-调研报告）
     url = '/admin/resources'
-    query.resourceType = resourceType
+    query = { page, size: pageSize, ...(keyword ? { keyword } : {}) }
+    if (resourceType !== undefined && resourceType !== null && !Number.isNaN(resourceType)) {
+      query.resourceType = resourceType
+    }
   } else if (t === 3) {
     url = '/admin/products'
+    query = { page, size: pageSize, ...(keyword ? { keyword } : {}) }
   } else if (t === 4) {
     url = '/admin/activities'
-    // 活动接口使用 pageNum/pageSize
-    delete query.page
-    delete query.size
-    query.pageNum = page
-    query.pageSize = pageSize
+    query = {
+      pageNum: page,
+      pageSize,
+      ...(keyword ? { keyword } : {}),
+    }
   } else {
     return { list: [], total: 0, page, pageSize }
   }

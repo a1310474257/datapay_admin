@@ -32,11 +32,15 @@ function toBackendPayload(data = {}) {
     brief: data.brief || '',
     description: data.description || '',
     fileType: data.fileType ?? data.file_type ?? '',
+    // fileUrl 传 objectKey（UploadFile use-object-key 模式返回），后端兼容完整 URL 自动提取
     fileUrl: data.fileUrl ?? data.file_url ?? '',
     fileSize: data.fileSize ?? data.file_size ?? '',
     pages: data.pages == null ? 0 : Number(data.pages),
     previewPages: data.previewPages ?? data.preview_pages ?? 0,
+    // previewUrl 同样传 objectKey
     previewUrl: data.previewUrl ?? data.preview_url ?? '',
+    // 业务更新日期（非系统自动时间戳），需显式传给后端
+    updateTime: data.updateTime ?? data.update_time ?? '',
     price: data.price == null ? 0 : Number(data.price),
     originalPrice: data.originalPrice ?? data.original_price ?? 0,
     status: data.status === undefined ? 1 : Number(data.status),

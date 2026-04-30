@@ -23,7 +23,7 @@
         <div class="thumb-item">
           <span class="drag-handle" title="拖拽排序">⋮⋮</span>
           <el-image
-            :src="element"
+            :src="resolveMediaPreviewUrl(element)"
             fit="cover"
             class="thumb"
             @click="openPreview(element)"
@@ -37,7 +37,7 @@
 
     <div v-else class="thumb-list">
       <div v-for="(u, index) in urls" :key="`${u}-${index}`" class="thumb-item">
-        <el-image :src="u" fit="cover" class="thumb" @click="openPreview(u)" />
+        <el-image :src="resolveMediaPreviewUrl(u)" fit="cover" class="thumb" @click="openPreview(u)" />
         <el-button class="del" circle size="small" type="danger" @click="removeAt(index)">
           <el-icon><Delete /></el-icon>
         </el-button>
@@ -45,7 +45,7 @@
     </div>
 
     <el-dialog v-model="previewVisible" title="预览" width="640px">
-      <img :src="previewUrl" alt="" style="width: 100%" />
+      <img :src="resolveMediaPreviewUrl(previewUrl)" alt="" style="width: 100%" />
     </el-dialog>
   </div>
 </template>
@@ -56,6 +56,7 @@ import { ElMessage } from 'element-plus'
 import { Delete } from '@element-plus/icons-vue'
 import draggable from 'vuedraggable'
 import { useUpload } from '@/hooks/useUpload'
+import { resolveMediaPreviewUrl } from '@/utils/mediaUrl'
 
 const urls = defineModel('urls', { type: Array, default: () => [] })
 
@@ -66,6 +67,8 @@ const props = defineProps({
   maxCount: { type: Number, default: 10 },
   /** 上传到 mock 的目录名 */
   folder: { type: String, default: 'product' },
+  /** 上传后是否返回 objectKey（业务落库字段建议开启） */
+  useObjectKey: { type: Boolean, default: false },
 })
 
 const { upload } = useUpload()
@@ -95,7 +98,7 @@ async function handleChange(file) {
     return
   }
   try {
-    const url = await upload(file.raw, props.folder)
+    const url = await upload(file.raw, props.folder, { returnObjectKey: props.useObjectKey })
     urls.value = [...urls.value, url]
   } catch (e) {
     ElMessage.error(e?.message || '上传失败')

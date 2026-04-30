@@ -1,5 +1,32 @@
 <template>
   <div class="dp-order-list">
+    <el-row :gutter="12" class="stats-row">
+      <el-col :span="6">
+        <el-card shadow="never">
+          <div class="stats-label">订单总数</div>
+          <div class="stats-value">{{ statistics.orderCount || 0 }}</div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card shadow="never">
+          <div class="stats-label">实付总额(元)</div>
+          <div class="stats-value">¥ {{ fen2yuan(statistics.paidAmount || 0) }}</div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card shadow="never">
+          <div class="stats-label">退款订单数</div>
+          <div class="stats-value">{{ statistics.refundOrderCount || 0 }}</div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card shadow="never">
+          <div class="stats-label">退款总额(元)</div>
+          <div class="stats-value">¥ {{ fen2yuan(statistics.refundAmount || 0) }}</div>
+        </el-card>
+      </el-col>
+    </el-row>
+
     <el-card class="status-card" shadow="never">
       <el-tabs v-model="activeStatusTab" @tab-change="handleTabChange">
         <el-tab-pane v-for="item in statusTabs" :key="item.value" :name="item.value">
@@ -16,7 +43,7 @@
       :model-value="searchParams"
       :schema="searchSchema"
       @update:model-value="handleSearchModelUpdate"
-      @search="onSearch"
+      @search="handleSearch"
     />
 
     <ProTable ref="tableRef" :columns="columns" :load-data="loadData">
@@ -56,7 +83,7 @@
             取消
           </el-button>
           <el-button
-            v-if="Number(row.status) === 1 && Number(row.order_type) === 5"
+            v-if="Number(row.status) === 1"
             v-permission="'order:ship'"
             link
             type="primary"
@@ -65,12 +92,21 @@
             发货
           </el-button>
           <el-button
-            v-if="Number(row.status) === 2 && Number(row.order_type) === 5"
+            v-if="Number(row.status) === 2"
             v-permission="'order:ship'"
             link
             @click="openShip(row, true)"
           >
             改运单
+          </el-button>
+          <el-button
+            v-if="Number(row.status) === 2"
+            v-permission="'order:complete'"
+            link
+            type="success"
+            @click="handleComplete(row)"
+          >
+            完成
           </el-button>
           <el-button
             v-if="Number(row.status) === 4"
@@ -105,7 +141,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { onActivated, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import SearchForm from '@/components/SearchForm/index.vue'
@@ -113,7 +149,7 @@ import ProTable from '@/components/ProTable/index.vue'
 import StatusTag from '@/components/StatusTag/index.vue'
 import { ORDER_STATUS, ORDER_TYPE } from '@/utils/enums'
 import { fen2yuan } from '@/utils/price'
-import { cancelOrder, getOrderList, getOrderStatusCount, updateOrderRemark } from '@/api/order'
+import { cancelOrder, completeOrder, getOrderList, getOrderStatistics, getOrderStatusCount, updateOrderRemark } from '@/api/order'
 import { useTable } from '@/hooks/useTable'
 import ShipOrderDialog from '@/views/order/components/ShipOrderDialog.vue'
 
@@ -123,16 +159,20 @@ const shipTarget = ref(null)
 const shipEdit = ref(false)
 const activeStatusTab = ref('')
 const statusCountMap = reactive({ 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 })
+const statistics = reactive({
+  orderCount: 0,
+  paidAmount: 0,
+  refundOrderCount: 0,
+  refundAmount: 0,
+})
 const { tableRef, searchParams, loadData, onSearch } = useTable({
   loadApi: getOrderList,
   defaultParams: {
     status: '',
-    keyword: '',
     order_type: '',
     order_no: '',
     user_id: '',
     created_at: [],
-    pay_time: [],
   },
 })
 
@@ -155,9 +195,8 @@ const searchSchema = [
     options: Object.entries(ORDER_TYPE).map(([value, item]) => ({ value: Number(value), label: item.label })),
   },
   { prop: 'order_no', label: '订单号', type: 'input', placeholder: '请输入订单号' },
-  { prop: 'keyword', label: '用户', type: 'input', placeholder: '昵称/手机号' },
+  { prop: 'user_id', label: '用户ID', type: 'input', placeholder: '请输入用户ID' },
   { prop: 'created_at', label: '下单时间', type: 'daterange', span: 8 },
-  { prop: 'pay_time', label: '付款时间', type: 'daterange', span: 8 },
 ]
 
 const columns = [
@@ -186,6 +225,11 @@ function handleSearchModelUpdate(value) {
   Object.assign(searchParams, value || {})
 }
 
+function handleSearch() {
+  onSearch()
+  loadStatistics()
+}
+
 function handleTabChange(status) {
   searchParams.status = status
   tableRef.value?.setParams({ ...searchParams, status })
@@ -204,6 +248,7 @@ function openShip(row, edit = false) {
 
 function onShipSuccess() {
   loadStatusCount()
+  loadStatistics()
   tableRef.value?.refresh()
 }
 
@@ -221,6 +266,7 @@ async function handleCancel(row) {
     await cancelOrder(row.id, value)
     ElMessage.success('订单已取消')
     await loadStatusCount()
+    await loadStatistics()
     tableRef.value?.refresh()
   } catch (error) {
     if (error !== 'cancel' && error !== 'close') {
@@ -245,6 +291,25 @@ async function handleRemark(row) {
   }
 }
 
+async function handleComplete(row) {
+  try {
+    await ElMessageBox.confirm(`确认将订单 ${row.order_no} 标记为已完成吗？`, '完成订单', {
+      type: 'warning',
+      confirmButtonText: '确认完成',
+      cancelButtonText: '取消',
+    })
+    await completeOrder(row.id)
+    ElMessage.success('订单已完成')
+    await loadStatusCount()
+    await loadStatistics()
+    tableRef.value?.refresh()
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      ElMessage.error(error?.message || '完成订单失败')
+    }
+  }
+}
+
 async function loadStatusCount() {
   try {
     const data = await getOrderStatusCount()
@@ -254,14 +319,52 @@ async function loadStatusCount() {
   }
 }
 
+async function loadStatistics() {
+  try {
+    const data = await getOrderStatistics({ dateRange: searchParams.created_at })
+    Object.assign(statistics, {
+      orderCount: Number(data.orderCount || 0),
+      paidAmount: Number(data.paidAmount || data.totalPaidAmount || 0),
+      refundOrderCount: Number(data.refundOrderCount || 0),
+      refundAmount: Number(data.refundAmount || data.totalRefundAmount || 0),
+    })
+  } catch (error) {
+    ElMessage.error(error?.message || '统计加载失败')
+  }
+}
+
 onMounted(() => {
   loadStatusCount()
+  loadStatistics()
+})
+
+// 列表页被 keep-alive 缓存：从详情页返回时不会触发 onMounted，
+// 用 onActivated 在再次激活时刷新一次，保证编辑/新建后能看到最新数据。
+onActivated(() => {
+  tableRef.value?.refresh()
+  loadStatusCount()
+  loadStatistics()
 })
 </script>
 
 <style scoped>
+.stats-row {
+  margin-bottom: 12px;
+}
+
 .status-card {
   margin-bottom: 12px;
+}
+
+.stats-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.stats-value {
+  margin-top: 8px;
+  font-size: 24px;
+  font-weight: 600;
 }
 
 .sub-text {

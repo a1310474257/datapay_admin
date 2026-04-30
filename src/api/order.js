@@ -1,5 +1,6 @@
 import request from './request'
 import { fromBackendPage, toBackendParams, withAliases } from './adapter'
+import { resolveMediaPreviewUrl } from '@/utils/mediaUrl'
 
 // ---------- 枚举映射 ----------
 // 后端使用字符串枚举，前端历史 UI 使用 0..6 / 1..5 数字枚举。
@@ -61,6 +62,10 @@ function mapOrderRow(row) {
     created_at: row.createTime,
     pay_time: row.payTime,
     ship_time: row.shipTime,
+    items: (row.items || []).map((item) => ({
+      ...item,
+      cover: resolveMediaPreviewUrl(item.cover),
+    })),
   }
 }
 
@@ -118,6 +123,7 @@ export async function getOrderDetail(orderNo) {
   const items = (data.items || []).map((it) => ({
     ...it,
     item_id: it.itemId,
+    cover: resolveMediaPreviewUrl(it.cover),
   }))
   let addressSnap = null
   if (data.address) {
@@ -140,9 +146,9 @@ export async function getOrderDetail(orderNo) {
     actual_pay: priceDetail.actualPay ?? data.totalPrice,
     items,
     address_snap: addressSnap,
-    user: null, // 后端详情未返回 user，后续可通过 /api/admin/users/{id} 单独查
+    user: data.user || null,
     payRecords: [], // 后端详情不返回支付流水
-    remark: '', // 后端暂未开放备注
+    remark: data.remark || '', // 后端若后续开放备注可直接透传
   }
 }
 
@@ -172,6 +178,13 @@ export async function updateOrderExpress(orderNo, { express_company, express_no 
   return shipOrder(orderNo, { express_company, express_no })
 }
 
+// 完成订单：POST /api/admin/orders/{orderNo}/complete
+// 说明：接口文档未显式列出该接口；若后端尚未发布，会返回业务错误并在页面提示。
+export async function completeOrder(orderNo) {
+  await request.post(`/admin/orders/${orderNo}/complete`)
+  return { success: true }
+}
+
 // 退款审核：POST /api/admin/orders/{orderNo}/refund/review
 export async function reviewOrderRefund(orderNo, approve, remark) {
   await request.post(`/admin/orders/${orderNo}/refund/review`, {
@@ -183,6 +196,11 @@ export async function reviewOrderRefund(orderNo, approve, remark) {
 
 // 订单统计（Dashboard 使用）：GET /api/admin/orders/statistics?startDate&endDate
 export async function getOrderStatistics(params = {}) {
-  const data = await request.get('/admin/orders/statistics', { params })
+  const [startDate, endDate] = Array.isArray(params.dateRange) ? params.dateRange : []
+  const query = {
+    startDate: params.startDate || startDate,
+    endDate: params.endDate || endDate,
+  }
+  const data = await request.get('/admin/orders/statistics', { params: query })
   return data || {}
 }

@@ -11,7 +11,7 @@
         <el-button v-permission="'teacher:create'" type="primary" @click="openCreateDialog">新增讲师</el-button>
       </template>
       <template #avatar="{ row }">
-        <el-avatar :src="row.avatar" :size="34" />
+        <el-avatar :src="resolveTeacherAvatar(row.avatar)" :size="34" />
       </template>
       <template #brief="{ row }">
         <el-tooltip :content="row.brief || row.intro || '—'" placement="top">
@@ -29,7 +29,7 @@
     <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑讲师' : '新增讲师'" width="640px" destroy-on-close>
       <el-form ref="formRef" :model="formModel" :rules="formRules" label-width="90px">
         <el-form-item label="头像" prop="avatar">
-          <UploadImage v-model="formModel.avatar" folder="teacher" ratio="1:1" />
+          <UploadImage v-model="formModel.avatar" folder="teacher" ratio="1:1" use-object-key />
         </el-form-item>
         <el-form-item label="姓名" prop="name">
           <el-input v-model="formModel.name" maxlength="50" show-word-limit />
@@ -136,6 +136,18 @@ function resetForm() {
     sort: 1,
     status: 1,
   })
+}
+
+/**
+ * 讲师头像地址解析：
+ * 1. 兼容历史 http(s)/data 直链；
+ * 2. objectKey 统一通过后端 /api/file 中转访问，避免前端直连对象存储。
+ */
+function resolveTeacherAvatar(value) {
+  if (!value) return ''
+  if (/^https?:\/\//i.test(value) || value.startsWith('data:')) return value
+  if (value.startsWith('image/')) return `/api/file/image?key=${value}`
+  return `/api/file/${encodeURIComponent(value)}`
 }
 
 function openCreateDialog() {

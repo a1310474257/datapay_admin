@@ -1,24 +1,27 @@
 <template>
   <div class="dp-product-detail">
-    <el-card>
-      <template #header>
-        <div class="header-wrap">
-          <span>{{ isCreate ? '新建商品' : `商品详情 #${route.params.id}` }}</span>
-          <el-space>
-            <el-button @click="goBack">返回</el-button>
-            <el-button v-if="activeTab === 'base'" type="primary" :loading="submitting" @click="saveBase">
-              保存
-            </el-button>
-            <el-button v-if="activeTab === 'images' && !isCreate" type="primary" :loading="imgSaving" @click="saveImg">
-              保存轮播
-            </el-button>
-            <el-button v-if="activeTab === 'spec' && !isCreate" type="primary" :loading="specSaving" @click="saveSpec">
-              保存规格
-            </el-button>
-          </el-space>
+    <el-card class="page-header" shadow="never">
+      <div class="header-wrap">
+        <div class="title-wrap">
+          <div class="header-title">{{ isCreate ? '新建商品' : `商品详情 #${route.params.id}` }}</div>
+          <div class="header-subtitle">商品基础信息、轮播图与规格统一维护</div>
         </div>
-      </template>
+        <el-space>
+          <el-button @click="goBack">返回列表</el-button>
+          <el-button v-if="activeTab === 'base'" type="primary" :loading="submitting" @click="saveBase">
+            保存商品
+          </el-button>
+          <el-button v-if="activeTab === 'images' && !isCreate" type="primary" :loading="imgSaving" @click="saveImg">
+            保存轮播图
+          </el-button>
+          <el-button v-if="activeTab === 'spec' && !isCreate" type="primary" :loading="specSaving" @click="saveSpec">
+            保存规格
+          </el-button>
+        </el-space>
+      </div>
+    </el-card>
 
+    <el-card shadow="never">
       <el-tabs v-model="activeTab">
         <el-tab-pane label="基本信息" name="base">
           <el-alert
@@ -36,7 +39,7 @@
               <el-input v-model="form.title" maxlength="120" />
             </el-form-item>
             <el-form-item label="封面" prop="cover">
-              <UploadImage v-model="form.cover" folder="product" ratio="1:1" />
+              <UploadImage v-model="form.cover" folder="product" ratio="1:1" use-object-key />
             </el-form-item>
             <el-form-item label="卖点" prop="brief">
               <el-input v-model="form.brief" type="textarea" :rows="2" maxlength="200" show-word-limit />
@@ -59,7 +62,7 @@
           </el-form>
         </el-tab-pane>
         <el-tab-pane label="轮播图" name="images" :disabled="isCreate">
-          <UploadImageList v-model:urls="images" sortable :max-count="10" folder="product" />
+          <UploadImageList v-model:urls="images" sortable :max-count="10" folder="product" use-object-key />
         </el-tab-pane>
         <el-tab-pane label="规格" name="spec" :disabled="isCreate">
           <SpecEditor v-model="specs" />
@@ -144,7 +147,11 @@ async function saveBase() {
   submitting.value = true
   try {
     if (isCreate.value) {
-      const row = await createProduct({ ...form })
+      const row = await createProduct({
+        ...form,
+        images: images.value,
+        specs: specs.value,
+      })
       ElMessage.success('创建成功')
       router.replace(`/product/detail/${row.id}`)
       return
@@ -183,7 +190,10 @@ async function saveSpec() {
 }
 
 function goBack() {
-  router.push('/product/list')
+  router.replace({
+    path: '/product/list',
+    query: { t: String(Date.now()) },
+  })
 }
 
 onMounted(async () => {
@@ -193,10 +203,32 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.page-header {
+  margin-bottom: 12px;
+}
+
 .header-wrap {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
+}
+
+.title-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.header-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.header-subtitle {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .mb {

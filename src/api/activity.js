@@ -187,10 +187,10 @@ export async function batchCheckinRegister(rowsOrIds = [], activityIdArg) {
 }
 
 export async function verifyRegisterCode(activityId, code) {
-  // 扫码签到：前端使用报名 ID 作为核销码
-  const id = Number(String(code).trim())
-  if (!id) throw new Error('无效的核销码')
-  await checkinRegister(activityId, id)
+  // 扫码签到：核销码即报名 ID，注意 checkinRegister(registerId, activityId) 参数顺序
+  const registerId = Number(String(code).trim())
+  if (!registerId) throw new Error('无效的核销码')
+  await checkinRegister(registerId, activityId)
   return { success: true }
 }
 

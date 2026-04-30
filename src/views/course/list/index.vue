@@ -11,7 +11,11 @@
         <el-button v-permission="'course:create'" type="primary" @click="goCreate">新建课程</el-button>
       </template>
       <template #cover="{ row }">
-        <el-image :src="row.cover" fit="cover" style="width: 72px; height: 42px; border-radius: 6px" />
+        <el-image
+          :src="resolveMediaPreviewUrl(row.cover)"
+          fit="cover"
+          style="width: 72px; height: 42px; border-radius: 6px"
+        />
       </template>
       <template #category="{ row }">
         {{ getCategoryName(row.category_id) }}
@@ -41,13 +45,14 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onActivated, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import SearchForm from '@/components/SearchForm/index.vue'
 import ProTable from '@/components/ProTable/index.vue'
 import { STATUS_ONLINE } from '@/utils/enums'
 import { fen2yuan } from '@/utils/price'
+import { resolveMediaPreviewUrl } from '@/utils/mediaUrl'
 import { deleteCourse, getCourseList, toggleCourseStatus } from '@/api/course'
 import { useTable } from '@/hooks/useTable'
 import { useDictStore } from '@/stores/dict'
@@ -141,5 +146,11 @@ async function handleDelete(row) {
 onMounted(() => {
   dictStore.loadCategory()
   dictStore.loadTeacher()
+})
+
+// 列表页被 keep-alive 缓存：从详情页返回时不会触发 onMounted，
+// 用 onActivated 在再次激活时刷新一次，保证编辑/新建后能看到最新数据。
+onActivated(() => {
+  tableRef.value?.refresh()
 })
 </script>

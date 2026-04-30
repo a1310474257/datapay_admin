@@ -26,7 +26,8 @@
               <el-input v-model="formModel.title" maxlength="200" show-word-limit />
             </el-form-item>
             <el-form-item label="课程封面" prop="cover">
-              <UploadImage v-model="formModel.cover" folder="course" ratio="16:9" />
+              <!-- 与首页轮播一致：上传存 objectKey，预览走 /api/file；详情见 doc/首页轮播图上传下载模式说明.md -->
+              <UploadImage v-model="formModel.cover" folder="course" ratio="16:9" use-object-key />
             </el-form-item>
             <el-form-item label="课程简介" prop="brief">
               <el-input v-model="formModel.brief" type="textarea" :rows="3" maxlength="500" show-word-limit />
@@ -48,8 +49,10 @@
             </el-form-item>
           </el-form>
         </el-tab-pane>
+        <!-- 新建课程时 route 为 /course/detail/new，不可用「new」调用 /admin/courses/{courseId}/...，否则后端 path 变量 courseId 无法转为 Long -->
         <el-tab-pane label="章节课时" name="chapter" :disabled="isCreateMode">
           <ChapterLessonTree
+            v-if="!isCreateMode"
             v-model:tree="chapterTree"
             :course-id="route.params.id"
             :loading="chapterSaving"
@@ -57,9 +60,20 @@
           />
         </el-tab-pane>
         <el-tab-pane label="配套资料" name="material" :disabled="isCreateMode">
-          <ProTable ref="matTableRef" :columns="matColumns" :load-data="loadMaterials">
+          <ProTable v-if="!isCreateMode" ref="matTableRef" :columns="matColumns" :load-data="loadMaterials">
             <template #toolbar-left>
               <el-button type="primary" @click="openMaterialDialog()">新增资料</el-button>
+            </template>
+            <!-- 下载按钮：通过 JS fetch 携带管理员 JWT 下载，避免新标签页丢失鉴权头 -->
+            <template #url="{ row }">
+              <el-button
+                v-if="row.url"
+                link
+                type="primary"
+                :loading="downloadingId === row.id"
+                @click="handleDownloadMaterial(row)"
+              >下载</el-button>
+              <span v-else>—</span>
             </template>
             <template #actions="{ row }">
               <el-space>
@@ -88,8 +102,17 @@
             <el-option label="MP4" value="MP4" />
           </el-select>
         </el-form-item>
+        <!-- use-object-key：资料文件落库 objectKey；管理员通过 /api/file 直通 BOS 下载，
+             小程序用户需已购校验后通过同一接口下载；
+             init-name：编辑时注入已存储的原始文件名，避免回显 BOS UUID -->
         <el-form-item label="文件" prop="url">
-          <UploadFile v-model="matForm.url" />
+          <UploadFile
+            v-model="matForm.url"
+            :use-object-key="true"
+            :init-name="matForm.file_name"
+            @name-resolved="(n) => (matForm.file_name = n)"
+            @size-resolved="(s) => (matForm.file_size = s)"
+          />
         </el-form-item>
         <el-form-item label="排序" prop="sort">
           <el-input-number v-model="matForm.sort" :min="1" :max="9999" />
@@ -107,6 +130,8 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { resolveMediaPreviewUrl } from '@/utils/mediaUrl'
+import { downloadWithAuth } from '@/utils/download'
 import DictSelect from '@/components/DictSelect/index.vue'
 import UploadImage from '@/components/UploadImage/index.vue'
 import RichEditor from '@/components/RichEditor/index.vue'
@@ -166,12 +191,18 @@ const chapterSaving = ref(false)
 const matTableRef = ref(null)
 const matDialog = ref(false)
 const matSaving = ref(false)
+// 正在下载的资料 id，用于按钮 loading 状态；同时只允许一个下载任务
+const downloadingId = ref(null)
 const matFormRef = ref(null)
 const matForm = reactive({
   id: null,
   title: '',
   type: 'PDF',
   url: '',
+  // 资料文件原始名称，供 UploadFile initName 回显时显示友好名称而非 BOS UUID
+  file_name: '',
+  // 格式化后的文件大小（如 "1.2 MB"），由 UploadFile size-resolved 事件或后端回填
+  file_size: '',
   sort: 1,
 })
 const matRules = {
@@ -184,7 +215,7 @@ const matColumns = [
   { prop: 'title', label: '标题', minWidth: 160 },
   { prop: 'type', label: '类型', width: 100 },
   { prop: 'file_size', label: '大小', width: 100 },
-  { prop: 'url', label: '下载链接', minWidth: 200, showOverflowTooltip: true },
+  { prop: 'url', label: '下载链接', minWidth: 140, slot: 'url' },
   { prop: 'sort', label: '排序', width: 80 },
   { prop: 'actions', label: '操作', width: 140, fixed: 'right', slot: 'actions' },
 ]
@@ -252,7 +283,26 @@ async function saveChapterTree() {
 }
 
 function loadMaterials(params) {
-  return getMaterials(route.params.id).then((all) => {
+  const rawId = route.params.id
+  // 避免 /course/detail/new 或非法 id 请求 /admin/courses/{courseId}/materials
+  if (rawId === 'new' || rawId == null || String(rawId).trim() === '') {
+    return Promise.resolve({
+      list: [],
+      total: 0,
+      page: Number(params.page || 1),
+      pageSize: Number(params.pageSize || 10),
+    })
+  }
+  const num = Number(rawId)
+  if (Number.isNaN(num) || num < 1) {
+    return Promise.resolve({
+      list: [],
+      total: 0,
+      page: Number(params.page || 1),
+      pageSize: Number(params.pageSize || 10),
+    })
+  }
+  return getMaterials(rawId).then((all) => {
     const page = Number(params.page || 1)
     const pageSize = Number(params.pageSize || 10)
     const start = (page - 1) * pageSize
@@ -272,10 +322,14 @@ function openMaterialDialog(row) {
       title: row.title,
       type: row.type,
       url: row.url,
+      // 回显存储的原始文件名，用于 UploadFile initName 显示友好名称
+      file_name: row.file_name || '',
+      // 回显存储的文件大小，编辑时若不重新上传则保持原值
+      file_size: row.file_size || '',
       sort: row.sort,
     })
   } else {
-    Object.assign(matForm, { id: null, title: '', type: 'PDF', url: '', sort: 1 })
+    Object.assign(matForm, { id: null, title: '', type: 'PDF', url: '', file_name: '', file_size: '', sort: 1 })
   }
   matDialog.value = true
 }
@@ -285,10 +339,7 @@ async function submitMaterial() {
   if (!ok) return
   matSaving.value = true
   try {
-    await saveMaterial(route.params.id, {
-      ...matForm,
-      file_size: matForm.file_size || '—',
-    })
+    await saveMaterial(route.params.id, { ...matForm })
     ElMessage.success('资料已保存')
     matDialog.value = false
     matTableRef.value?.refresh()
@@ -296,6 +347,19 @@ async function submitMaterial() {
     ElMessage.error(e?.message || '保存失败')
   } finally {
     matSaving.value = false
+  }
+}
+
+async function handleDownloadMaterial(row) {
+  if (!row.url) return
+  downloadingId.value = row.id
+  try {
+    // 携带管理员 JWT 发起 fetch 请求，避免新标签页丢失鉴权头导致 401
+    await downloadWithAuth(resolveMediaPreviewUrl(row.url), row.title || undefined)
+  } catch {
+    // 错误已在 downloadWithAuth 内部弹 ElMessage，此处不重复提示
+  } finally {
+    downloadingId.value = null
   }
 }
 
@@ -339,7 +403,12 @@ async function handleSubmit() {
 }
 
 function goBack() {
-  router.push('/course/list')
+  // 优先用浏览器历史回退，避免 router.push 在历史栈追加新条目导致循环
+  if (window.history.length > 1) {
+    router.back()
+  } else {
+    router.push('/course/list')
+  }
 }
 
 onMounted(async () => {

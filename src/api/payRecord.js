@@ -1,36 +1,26 @@
-import { db } from '@/mock'
-import { delay } from './mockApi'
+import request from './request'
+import { fromBackendPage, toBackendParams, withAliases } from './adapter'
 
-// 支付流水：后端暂未提供 /api/admin/pay-records 接口，当前保留 Mock。
-// 后续后端接入微信支付回单后可以切换为真实数据源。
+// 支付流水：按后端 /api/admin/pay-records 分页接口直接查询。
 export async function getPayRecordList(params = {}) {
-  await delay()
-  const page = Number(params.page || 1)
-  const pageSize = Number(params.pageSize || 10)
-  let rows = (db.payRecord || []).map((r) => ({
-    ...r,
-    transaction_id: r.wx_transaction_id || '',
-    channel: '微信支付',
-  }))
-  if (params.order_no) {
-    const t = String(params.order_no).trim()
-    rows = rows.filter((r) => String(r.order_no || '').includes(t))
-  }
-  if (params.transaction_id) {
-    const t = String(params.transaction_id).trim()
-    rows = rows.filter((r) => String(r.transaction_id || '').includes(t))
-  }
-  if (params.status !== '' && params.status !== undefined) {
-    rows = rows.filter((r) => Number(r.status) === Number(params.status))
-  }
-  if (params.paid_at?.length === 2) {
-    const [start, end] = params.paid_at
-    rows = rows.filter(
-      (r) => String(r.paid_at) >= `${start} 00:00:00` && String(r.paid_at) <= `${end} 23:59:59`,
-    )
-  }
-  rows.sort((a, b) => Number(b.id) - Number(a.id))
-  const total = rows.length
-  const list = rows.slice((page - 1) * pageSize, page * pageSize)
-  return { list, total, page, pageSize }
+  const [startDate, endDate] = Array.isArray(params.paid_at) ? params.paid_at : []
+  const backendParams = toBackendParams(params, {
+    keyword: params.order_no || params.transaction_id || params.keyword,
+    startDate,
+    endDate,
+  })
+  delete backendParams.order_no
+  delete backendParams.transaction_id
+  delete backendParams.paid_at
+  const page = await request.get('/admin/pay-records', { params: backendParams })
+  return fromBackendPage(page, (row) => {
+    const aliased = withAliases(row)
+    return {
+      ...aliased,
+      transaction_id: row.transactionId || row.wxTransactionId || aliased.transaction_id || '',
+      order_no: row.orderNo || aliased.order_no || '',
+      paid_at: row.paidAt || aliased.paid_at || '',
+      channel: row.channel || '微信支付',
+    }
+  })
 }

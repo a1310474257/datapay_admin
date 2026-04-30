@@ -5,13 +5,15 @@ import { fromBackendPage, makeRowMapper, withAliases } from './adapter'
 // 后端返回按“课时”的进度记录；前端期望“按用户x课程汇总进度”。
 // 这里做分组聚合：先拉取查询范围内的所有进度，再按 user+course 聚合。
 
-const LIST_SIZE = 200
+// 后端限制 pageSize <= 100，这里统一使用 100，避免触发参数校验错误。
+const LIST_SIZE = 100
 
 async function fetchAllProgress({ userId, courseId }) {
   // 最多拉 2000 条，避免爆炸；真实生产应后端提供聚合接口。
   const all = []
   let page = 1
-  while (page <= 10) { // eslint-disable-line no-constant-condition
+  // 维持“最多拉取约 2000 条”的上限：100 * 20 = 2000
+  while (page <= 20) { // eslint-disable-line no-constant-condition
     // eslint-disable-next-line no-await-in-loop
     const res = await request.get('/admin/lesson-progresses', {
       params: { pageNum: page, pageSize: LIST_SIZE, userId, courseId },
@@ -121,7 +123,7 @@ export async function getStudyProgressLessons(userId, courseId) {
   for (const ch of chList) {
     // eslint-disable-next-line no-await-in-loop
     const lesPage = await request.get(`/admin/courses/${cid}/chapters/${ch.id}/lessons`, {
-      params: { pageNum: 1, pageSize: 200 },
+      params: { pageNum: 1, pageSize: 100 },
     })
     lessonsAll.push(...fromBackendPage(lesPage).list)
   }

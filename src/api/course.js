@@ -8,12 +8,12 @@ function mapCourseRow(row) {
   const aliased = withAliases(row)
   return {
     ...aliased,
-    category_id: row.categoryId,
-    teacher_id: row.teacherId,
-    teacher_name: row.teacherName,
-    total_duration: row.totalDuration,
-    original_price: row.originalPrice,
-    chapter_count: row.chapterCount,
+    category_id: row.categoryId ?? row.category_id,
+    teacher_id: row.teacherId ?? row.teacher_id,
+    teacher_name: row.teacherName ?? row.teacher_name,
+    total_duration: row.totalDuration ?? row.total_duration,
+    original_price: row.originalPrice ?? row.original_price,
+    chapter_count: row.chapterCount ?? row.chapter_count,
   }
 }
 const rowMapper = makeRowMapper(mapCourseRow)
@@ -88,7 +88,8 @@ async function fetchChaptersRaw(courseId) {
 
 async function fetchLessonsRaw(courseId, chapterId) {
   const page = await request.get(`/admin/courses/${courseId}/chapters/${chapterId}/lessons`, {
-    params: { pageNum: 1, pageSize: 200 },
+    // TeacherQueryDTO / CourseLessonQueryDTO 均限制 pageSize <= 100
+    params: { pageNum: 1, pageSize: 100 },
   })
   return fromBackendPage(page).list
 }
@@ -109,11 +110,15 @@ export async function getChapters(courseId) {
           id: les.id,
           course_id: Number(courseId),
           chapter_id: ch.id,
-          title: les.title,
-          duration_sec: les.durationSec,
-          video_url: les.videoUrl,
-          is_free: les.isFree,
-          sort: les.sort,
+          title: les.title || '',
+          // durationSec 可能为 null，统一转为数字避免 el-input-number 显示 NaN
+          duration_sec: Number(les.durationSec || 0),
+          video_url: les.videoUrl || '',
+          // 回显已存储的原始文件名（后端返回时带 videoName 则显示，否则降级为空）
+          video_name: les.videoName || '',
+          // isFree 后端为 Integer(0/1)，转为数字保证 el-switch 匹配 active-value="1"
+          is_free: Number(les.isFree ?? 0),
+          sort: Number(les.sort ?? 0),
         })),
     }
   }))
@@ -144,6 +149,8 @@ export async function saveChapters(courseId, tree) {
         title: les.title || `课时 ${j + 1}`,
         durationSec: Number(les.duration_sec || 0),
         videoUrl: les.video_url || '',
+        // 保存原始文件名，供下次回显时显示友好名称而非 BOS UUID
+        videoName: les.video_name || '',
         isFree: Number(les.is_free ?? 0),
         sort: Number(les.sort ?? j + 1),
       })
@@ -165,6 +172,8 @@ export async function getMaterials(courseId) {
       type: row.type,
       file_size: row.fileSize,
       url: row.url,
+      // 原始文件名（后端字段 fileName），用于前端回显时显示友好名称而非 BOS UUID
+      file_name: row.fileName || row.file_name || '',
       sort: row.sort,
     }))
     .sort((a, b) => Number(a.sort) - Number(b.sort))
@@ -176,6 +185,8 @@ function toBackendMaterial(data) {
     type: data.type || '',
     fileSize: data.file_size || data.fileSize || '',
     url: data.url,
+    // 持久化原始文件名，下次回显时可由 UploadFile initName 显示友好名称而非 BOS UUID
+    fileName: data.file_name || data.fileName || '',
     sort: Number(data.sort ?? 0),
   }
 }

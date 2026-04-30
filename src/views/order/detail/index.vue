@@ -90,7 +90,7 @@
       <el-space wrap>
         <el-button v-if="Number(order.status) === 0" type="danger" @click="handleCancel">取消订单</el-button>
         <el-button
-          v-if="Number(order.status) === 1 && Number(order.order_type) === 5"
+          v-if="Number(order.status) === 1"
           v-permission="'order:ship'"
           type="primary"
           @click="openShip(false)"
@@ -98,11 +98,19 @@
           发货
         </el-button>
         <el-button
-          v-if="Number(order.status) === 2 && Number(order.order_type) === 5"
+          v-if="Number(order.status) === 2"
           v-permission="'order:ship'"
           @click="openShip(true)"
         >
           修改运单
+        </el-button>
+        <el-button
+          v-if="Number(order.status) === 2"
+          v-permission="'order:complete'"
+          type="success"
+          @click="handleComplete"
+        >
+          完成订单
         </el-button>
         <el-button v-if="Number(order.status) === 4" type="danger" @click="goRefund">查看退款</el-button>
         <el-button v-if="[0, 1, 2, 3].includes(Number(order.status))" type="warning" @click="handleRemark">
@@ -130,7 +138,7 @@ import AddressSnapView from '@/components/AddressSnapView/index.vue'
 import StatusTag from '@/components/StatusTag/index.vue'
 import { ORDER_STATUS, ORDER_TYPE } from '@/utils/enums'
 import { fen2yuan } from '@/utils/price'
-import { cancelOrder, getOrderDetail, updateOrderRemark } from '@/api/order'
+import { cancelOrder, completeOrder, getOrderDetail, updateOrderRemark } from '@/api/order'
 import ShipOrderDialog from '@/views/order/components/ShipOrderDialog.vue'
 
 const route = useRoute()
@@ -186,8 +194,29 @@ async function handleRemark() {
   }
 }
 
+async function handleComplete() {
+  try {
+    await ElMessageBox.confirm(`确认将订单 ${order.order_no} 标记为已完成吗？`, '完成订单', {
+      type: 'warning',
+      confirmButtonText: '确认完成',
+      cancelButtonText: '取消',
+    })
+    await completeOrder(order.id)
+    ElMessage.success('订单已完成')
+    loadDetail()
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      ElMessage.error(error?.message || '完成订单失败')
+    }
+  }
+}
+
 function goBack() {
-  router.push('/order/list')
+  if (window.history.length > 1) {
+    router.back()
+  } else {
+    router.push('/order/list')
+  }
 }
 
 function openShip(edit) {

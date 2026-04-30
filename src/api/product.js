@@ -31,8 +31,10 @@ export async function findProductById(id) {
   const data = await request.get(`/admin/products/${id}`)
   if (!data) throw new Error('商品不存在')
   const row = withAliases(data)
-  // 后端 images: [{id,imageUrl,sort}]，历史前端约定为 URL 字符串数组，二者都保留，兼容老组件。
-  const imageUrls = (data.images || []).map((img) => img.imageUrl).filter(Boolean)
+  // 后端 images: [{id,imageUrl,sort}]，前端统一存储 imageUrl(objectKey 或历史 URL) 数组。
+  const imageUrls = (data.images || [])
+    .map((img) => img?.imageUrl)
+    .filter(Boolean)
   const specs = (data.specs || []).map((s) => ({
     id: s.id,
     name: s.name,
@@ -49,7 +51,9 @@ export async function findProductById(id) {
 }
 
 function toBackendImages(urls = []) {
-  return (urls || []).map((url, idx) => ({ imageUrl: url, sort: idx }))
+  return (urls || [])
+    .filter(Boolean)
+    .map((url, idx) => ({ imageUrl: String(url), sort: idx }))
 }
 
 function toBackendSpecs(groups = []) {
@@ -92,7 +96,7 @@ export async function createProduct(data) {
 
 // 更新：PUT /api/admin/products/{id}
 export async function updateProduct(id, data) {
-  const payload = toBackendPayload(data)
+  const payload = toBackendPayload(data, { includeImagesSpecs: true })
   await request.put(`/admin/products/${id}`, payload)
   return { id }
 }
