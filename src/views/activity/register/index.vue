@@ -177,7 +177,7 @@ onMounted(async () => {
   // 真实活动下拉：之前误用了 @/mock 的内存 db，导致下拉里全是假活动，
   // 选中后 activityId 与库里的活动对不上，注册名单就显示为空（"异常"）。
   try {
-    const { list } = await getActivityList({ page: 1, pageSize: 200 })
+    const { list } = await getActivityList({ page: 1, pageSize: 100 })
     activityOptions.value = (list || []).map((a) => ({ label: a.title, value: a.id }))
   } catch (e) {
     activityOptions.value = []
