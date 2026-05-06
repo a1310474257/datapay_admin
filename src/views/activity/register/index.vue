@@ -53,12 +53,12 @@ import {
   batchCheckinRegister,
   checkinRegister,
   createRegisterExportTask,
+  getActivityList,
   getActivityRegisterList,
   getExportTask,
   verifyRegisterCode,
 } from '@/api/activity'
 import { useTable } from '@/hooks/useTable'
-import { db } from '@/mock'
 
 const { tableRef, searchParams, loadData, onSearch } = useTable({
   loadApi: getActivityRegisterList,
@@ -96,13 +96,16 @@ const searchSchema = reactive([
   { prop: 'created_at', label: '报名时间', type: 'daterange', span: 8 },
 ])
 
+// 注：列表按 activity_id 严格过滤，每行同一活动，因此不再展示"活动"列。
+// 后端 ActivityRegisterAdminVO 不返回 activity_title 字段，强行展示会出现整列空白。
 const columns = [
   { prop: 'id', label: 'ID', width: 72 },
-  { prop: 'activity_title', label: '活动', minWidth: 160 },
   { prop: 'name', label: '姓名', width: 100 },
   { prop: 'phone', label: '手机', width: 120 },
   { prop: 'company', label: '公司', minWidth: 140 },
+  { prop: 'userNickname', label: '微信昵称', minWidth: 120 },
   { prop: 'register_status', label: '状态', width: 100, slot: 'register_status' },
+  { prop: 'verifyCode', label: '核销码', width: 120 },
   { prop: 'created_at', label: '报名时间', minWidth: 170 },
   { prop: 'actions', label: '操作', width: 100, fixed: 'right', slot: 'actions' },
 ]
@@ -170,8 +173,16 @@ async function handleExport() {
   }
 }
 
-onMounted(() => {
-  activityOptions.value = db.activity.map((a) => ({ label: a.title, value: a.id }))
+onMounted(async () => {
+  // 真实活动下拉：之前误用了 @/mock 的内存 db，导致下拉里全是假活动，
+  // 选中后 activityId 与库里的活动对不上，注册名单就显示为空（"异常"）。
+  try {
+    const { list } = await getActivityList({ page: 1, pageSize: 200 })
+    activityOptions.value = (list || []).map((a) => ({ label: a.title, value: a.id }))
+  } catch (e) {
+    activityOptions.value = []
+    ElMessage.warning('活动列表加载失败：' + (e?.message || '请稍后重试'))
+  }
   const idx = searchSchema.findIndex((s) => s.prop === 'activity_id')
   if (idx >= 0) searchSchema[idx].options = activityOptions.value
   exportActivityId.value = searchParams.activity_id || ''

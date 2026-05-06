@@ -42,6 +42,7 @@ const searchSchema = [
     label: '状态',
     type: 'select',
     options: [
+      { label: '待支付', value: 0 },
       { label: '已支付', value: 1 },
       { label: '已退款', value: 2 },
     ],
