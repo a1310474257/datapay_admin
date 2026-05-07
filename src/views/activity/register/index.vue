@@ -26,11 +26,11 @@
         <el-button @click="verify">核销</el-button>
       </template>
       <template #register_status="{ row }">
-        <StatusTag :dict="REGISTER_STATUS" :value="row.register_status" />
+        <StatusTag :dict="REGISTER_STATUS" :value="row.registerStatus" />
       </template>
       <template #actions="{ row }">
         <el-button
-          v-if="Number(row.register_status) === 1"
+          v-if="Number(row.registerStatus) === 1"
           link
           type="primary"
           @click="oneCheck(row)"
@@ -104,9 +104,9 @@ const columns = [
   { prop: 'phone', label: '手机', width: 120 },
   { prop: 'company', label: '公司', minWidth: 140 },
   { prop: 'userNickname', label: '微信昵称', minWidth: 120 },
-  { prop: 'register_status', label: '状态', width: 100, slot: 'register_status' },
+  { prop: 'registerStatus', label: '状态', width: 100, slot: 'register_status' },
   { prop: 'verifyCode', label: '核销码', width: 120 },
-  { prop: 'created_at', label: '报名时间', minWidth: 170 },
+  { prop: 'createTime', label: '报名时间', minWidth: 170 },
   { prop: 'actions', label: '操作', width: 100, fixed: 'right', slot: 'actions' },
 ]
 
