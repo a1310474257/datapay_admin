@@ -8,11 +8,14 @@ WORKDIR /build
 ENV npm_config_registry=https://registry.npmmirror.com
 
 COPY package.json package-lock.json* ./
-RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+# --mount=type=cache: 保留 npm 包缓存，--no-cache 构建时也不重新下载依赖
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 
 COPY . .
 # 生产构建后的 dist 里的 /api 路径会被 nginx 转发到 datapay_server
-RUN npm run build
+RUN --mount=type=cache,target=/root/.npm \
+    npm run build
 
 # ------------------------ runtime ------------------------
 FROM nginx:1.27-alpine AS runtime
