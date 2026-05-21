@@ -1,6 +1,7 @@
 node_modules
 dist
 .git
+.gitignore
 .idea
 .vscode
 .DS_Store
@@ -9,3 +10,6 @@ dist
 .env.*
 !.env.production
 !.env.development
+# 构建不需要的文档和脚本
+*.md
+scripts/

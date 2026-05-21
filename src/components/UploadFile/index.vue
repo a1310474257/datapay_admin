@@ -10,8 +10,20 @@
       :on-exceed="handleExceed"
       :before-upload="beforeUpload"
     >
-      <el-button type="primary" :loading="uploading">选择文件</el-button>
+      <el-button type="primary" :loading="uploading">
+        {{ syncing ? '云端同步中...' : uploading ? `上传中 ${uploadProgress}%` : '选择文件' }}
+      </el-button>
     </el-upload>
+    <el-progress
+      v-if="uploading"
+      :percentage="uploadProgress"
+      :status="syncing ? 'striped' : undefined"
+      :striped="syncing"
+      :striped-flow="syncing"
+      :duration="syncing ? 10 : 0"
+      :stroke-width="6"
+      style="margin-top: 8px; width: 320px"
+    />
   </div>
 </template>
 
@@ -73,7 +85,7 @@ function formatFileSize(bytes) {
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
 }
-const { uploading, upload } = useUpload()
+const { uploading, uploadProgress, syncing, upload } = useUpload()
 
 // 记录用户选择文件时的原始文件名，避免上传后文件列表显示 BOS 生成的 UUID 名称。
 // 组件卸载后会丢失，这是可接受的（从已有数据回显时降级为 URL 末段文件名）。
@@ -106,10 +118,14 @@ const fileList = computed(() => {
 })
 
 function beforeUpload(file) {
-  const isValidSize = file.size / 1024 / 1024 <= props.maxSize
-  if (!isValidSize) {
-    ElMessage.error(`文件大小不能超过 ${props.maxSize}MB`)
-    return false
+  // 视频文件不限制大小（支持3G+大视频），其他文件按 maxSize 限制
+  const isVideo = String(file?.type || '').startsWith('video/')
+  if (!isVideo && props.maxSize > 0) {
+    const isValidSize = file.size / 1024 / 1024 <= props.maxSize
+    if (!isValidSize) {
+      ElMessage.error(`文件大小不能超过 ${props.maxSize}MB`)
+      return false
+    }
   }
   return true
 }
@@ -142,7 +158,10 @@ async function handleChange(file) {
   // 上传前记录原始文件名，上传成功后可在文件列表中显示真实名称而非 BOS UUID
   displayName.value = file.raw.name || ''
   try {
-    const value = await upload(file.raw, 'file', { returnObjectKey: props.useObjectKey })
+    const value = await upload(file.raw, 'file', {
+      returnObjectKey: props.useObjectKey,
+      onProgress: (pct) => { /* uploadProgress 已在 useUpload 内部更新 */ void pct },
+    })
     emit('update:modelValue', value)
     // 上传成功后向外同步原始文件名，父组件可持久化以供下次回显
     if (displayName.value) emit('name-resolved', displayName.value)

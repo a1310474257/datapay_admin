@@ -4,8 +4,8 @@
     <el-card class="page-header" shadow="never">
       <div class="header-bar">
         <div class="header-title">
-          <span class="title">资源管理</span>
-          <span class="subtitle">HR 工具与调研报告，统一资源池</span>
+          <span class="title">内容管理</span>
+          <span class="subtitle">HR工具与调研报告</span>
         </div>
         <el-tabs v-model="resTab" class="header-tabs" @tab-change="onTabChange">
           <el-tab-pane label="HR工具" name="1" />
@@ -24,7 +24,7 @@
     <ProTable ref="tableRef" :columns="columns" :load-data="loadData">
       <template #toolbar-left>
         <el-button v-permission="'resource:create'" type="primary" @click="openDialog()">
-          新建资源
+          新建{{ resTab === '1' ? 'HR工具' : '调研报告' }}
         </el-button>
       </template>
 
@@ -77,17 +77,23 @@
       >
         <el-row :gutter="16">
           <el-col :span="12">
-            <el-form-item label="分类" prop="category_id">
-              <!-- categoryId 后端 @NotNull 必填 -->
-              <DictSelect v-model="form.category_id" dict-key="category" style="width: 100%" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
             <el-form-item label="资源类型" prop="resource_type">
-              <el-radio-group v-model="form.resource_type">
+              <el-radio-group v-model="form.resource_type" @change="val => loadCategoriesByType(val)">
                 <el-radio :label="1">HR工具</el-radio>
                 <el-radio :label="2">调研报告</el-radio>
               </el-radio-group>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="分类" prop="category_id">
+              <el-select v-model="form.category_id" placeholder="请选择分类" style="width: 100%" clearable>
+                <el-option
+                  v-for="opt in categoryOptions"
+                  :key="opt.value"
+                  :label="opt.label"
+                  :value="opt.value"
+                />
+              </el-select>
             </el-form-item>
           </el-col>
         </el-row>
@@ -101,46 +107,74 @@
           <UploadImage v-model="form.cover" folder="resource" ratio="16:9" use-object-key />
         </el-form-item>
 
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="文件类型" prop="file_type">
-              <el-select v-model="form.file_type" style="width: 100%">
-                <el-option label="PDF" value="PDF" />
-                <el-option label="DOCX" value="DOCX" />
-                <el-option label="ZIP" value="ZIP" />
-                <el-option label="MP4" value="MP4" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="预览页数" prop="preview_pages">
-              <el-input-number
-                v-model="form.preview_pages"
-                :min="0"
-                :max="999"
-                style="width: 100%"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <!-- 统一文件列表：替代原「主文件」+「预览文件」+「附件」三块 -->
+        <el-form-item label="文件列表" prop="files" :error="filesError">
+          <div class="file-list-panel">
+            <!-- 已上传文件 -->
+            <div
+              v-for="(item, idx) in form.files"
+              :key="idx"
+              class="file-list-row"
+              :class="{ 'is-preview': item.isPreview }"
+            >
+              <!-- 左：类型标签 + 文件名 + 大小 -->
+              <div class="file-list-row__info">
+                <el-tag :type="fileTagType(item.type)" size="small" class="file-type-tag">{{ item.type || 'FILE' }}</el-tag>
+                <span class="file-list-row__name" :title="item.name">{{ item.name }}</span>
+                <span class="file-list-row__size">{{ item.size }}</span>
+              </div>
+              <!-- 右：操作按钮 -->
+              <div class="file-list-row__actions">
+                <el-tooltip content="上移" placement="top">
+                  <el-button link size="small" :disabled="idx === 0" @click="moveFile(idx, -1)">↑</el-button>
+                </el-tooltip>
+                <el-tooltip content="下移" placement="top">
+                  <el-button link size="small" :disabled="idx === form.files.length - 1" @click="moveFile(idx, 1)">↓</el-button>
+                </el-tooltip>
+                <el-tooltip content="删除" placement="top">
+                  <el-button link type="danger" size="small" @click="removeFile(idx)">删除</el-button>
+                </el-tooltip>
+                <el-divider direction="vertical" />
+                <!-- 预览文件标记 -->
+                <el-tooltip :content="item.isPreview ? '取消预览文件' : '指定为预览文件'" placement="top">
+                  <el-button
+                    link
+                    :type="item.isPreview ? 'warning' : 'info'"
+                    size="small"
+                    @click="togglePreview(idx)"
+                  >{{ item.isPreview ? '★ 预览中' : '☆ 设预览' }}</el-button>
+                </el-tooltip>
+                <!-- 预览页数（仅预览文件显示） -->
+                <template v-if="item.isPreview">
+                  <span class="preview-pages-label">预览页数</span>
+                  <el-input-number
+                    v-model="item.previewPages"
+                    :min="0"
+                    :max="999"
+                    size="small"
+                    style="width: 80px"
+                  />
+                </template>
+              </div>
+            </div>
 
-        <el-form-item label="主文件" prop="file_url">
-          <!-- 仅允许文档类文件；use-object-key：落库 objectKey，下载经 /api/file 代理 -->
-          <UploadFile
-            v-model="form.file_url"
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.zip"
-            use-object-key
-            @size-resolved="val => form.file_size = val"
-          />
-        </el-form-item>
+            <!-- 空状态 -->
+            <div v-if="!form.files.length" class="file-list-empty">暂无文件，请点击下方按钮上传</div>
 
-        <el-form-item label="预览文件" prop="preview_url">
-          <!-- 预览文件同样限制文档类；use-object-key：同样走 /api/file 代理 -->
-          <UploadFile
-            v-model="form.preview_url"
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.zip"
-            use-object-key
-          />
+            <!-- 上传按钮 -->
+            <el-upload
+              multiple
+              :auto-upload="false"
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.mp4"
+              :show-file-list="false"
+              :on-change="handleFileAdd"
+            >
+              <el-button size="small" :loading="fileUploading" type="primary" plain>
+                + 上传文件（可多选）
+              </el-button>
+            </el-upload>
+            <div class="file-list-tip">支持 PDF / Word / Excel / PPT / ZIP / MP4；可多选批量上传，新文件追加到末尾；最多指定一个文件为「预览文件」</div>
+          </div>
         </el-form-item>
 
         <el-row :gutter="16">
@@ -181,8 +215,8 @@
           :closable="false"
         />
 
-        <el-form-item label="简介" prop="brief">
-          <!-- brief 后端 @NotBlank 必填，纯文本摘要 -->
+        <!-- 调研报告必填简介；HR工具可选 -->
+        <el-form-item v-if="form.resource_type === 2" label="简介" prop="brief">
           <el-input
             v-model="form.brief"
             type="textarea"
@@ -193,8 +227,7 @@
           />
         </el-form-item>
 
-        <el-form-item label="详细介绍" prop="description">
-          <!-- description 后端 @NotBlank 必填，富文本HTML -->
+        <el-form-item v-if="form.resource_type === 2" label="详细介绍" prop="description">
           <RichEditor v-model="form.description" :height="220" />
         </el-form-item>
 
@@ -224,17 +257,17 @@
         <el-button type="primary" :loading="submitting" @click="submit">保存</el-button>
       </template>
     </el-dialog>
+
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useUpload } from '@/hooks/useUpload'
 import SearchForm from '@/components/SearchForm/index.vue'
 import ProTable from '@/components/ProTable/index.vue'
 import UploadImage from '@/components/UploadImage/index.vue'
-import UploadFile from '@/components/UploadFile/index.vue'
-import DictSelect from '@/components/DictSelect/index.vue'
 import RichEditor from '@/components/RichEditor/index.vue'
 import { RESOURCE_TYPE, STATUS_ENABLE } from '@/utils/enums'
 import { resolveMediaPreviewUrl } from '@/utils/mediaUrl'
@@ -246,14 +279,42 @@ import {
   getResourceList,
   updateResource,
 } from '@/api/resource'
+import { getCategoryList } from '@/api/category'
 import { useTable } from '@/hooks/useTable'
-import { useDictStore } from '@/stores/dict'
 
-// 加载分类字典，供 category_id 选择器使用
-const dictStore = useDictStore()
-onMounted(() => dictStore.loadCategory())
+// 分类选项：根据 resource_type 动态加载 (scene: 5=HR工具, 6=调研报告)
+const categoryOptions = ref([])
+async function loadCategoriesByType(resourceType) {
+  const scene = resourceType === 2 ? 6 : 5
+  try {
+    const result = await getCategoryList({ business_type: scene, status: 1, pageSize: 500 })
+    categoryOptions.value = (result?.list || []).map(c => ({ value: c.id, label: c.name }))
+  } catch {
+    categoryOptions.value = []
+  }
+}
+
+// 搜索栏分类选项：随 tab 切换加载
+const searchCategoryOptions = ref([])
+async function loadSearchCategories(resourceType) {
+  const scene = resourceType === 2 ? 6 : 5
+  try {
+    const result = await getCategoryList({ business_type: scene, status: 1, pageSize: 500 })
+    searchCategoryOptions.value = [
+      { value: '', label: '全部' },
+      ...(result?.list || []).map(c => ({ value: c.id, label: c.name })),
+    ]
+  } catch {
+    searchCategoryOptions.value = []
+  }
+}
 
 const resTab = ref('1')
+
+onMounted(() => {
+  loadCategoriesByType(1)
+  loadSearchCategories(1)
+})
 
 const { tableRef, searchParams, loadData, onSearch } = useTable({
   loadApi: getResourceList,
@@ -264,9 +325,14 @@ const { tableRef, searchParams, loadData, onSearch } = useTable({
   },
 })
 
-const searchSchema = [
+const searchSchema = computed(() => [
   { prop: 'keyword', label: '标题', type: 'input', placeholder: '资源标题关键字' },
-  { prop: 'category_id', label: '分类', type: 'dict-select', dictKey: 'category' },
+  {
+    prop: 'category_id',
+    label: '分类',
+    type: 'select',
+    options: searchCategoryOptions.value,
+  },
   {
     prop: 'status',
     label: '状态',
@@ -276,7 +342,7 @@ const searchSchema = [
       { label: '下架', value: 0 },
     ],
   },
-]
+])
 
 const columns = [
   { prop: 'id', label: 'ID', width: 72 },
@@ -296,36 +362,36 @@ const submitting = ref(false)
 const detailLoading = ref(false)
 const formRef = ref(null)
 
-// 表单内价格单位为元；与列表/接口的分单位通过 fen2yuan/yuan2fen 互转
+// form.files 每项：{ name, url, type, size, isPreview, previewPages }
 const form = reactive({
   id: null,
   title: '',
   cover: '',
   category_id: undefined,
   resource_type: 1,
-  file_type: 'PDF',
-  file_url: '',
-  preview_url: '',
-  preview_pages: 0,
-  original_price: 0, // 元
-  price: 0, // 元
+  original_price: 0,
+  price: 0,
   update_time: '',
   status: 1,
   brief: '',
   description: '',
-  file_size: '',
   pages: 0,
   downloads: 0,
+  files: [],
 })
 
-const rules = {
+// 文件列表错误提示（手动校验）
+const filesError = ref('')
+
+const rules = computed(() => ({
   title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
   cover: [{ required: true, message: '请上传封面', trigger: 'change' }],
   category_id: [{ required: true, message: '请选择分类', trigger: 'change' }],
-  brief: [{ required: true, message: '请输入简介', trigger: 'blur' }],
-  description: [{ required: true, message: '请输入详细介绍', trigger: 'blur' }],
-  file_url: [{ required: true, message: '请上传主文件', trigger: 'change' }],
-}
+  ...(form.resource_type === 2 ? {
+    brief: [{ required: true, message: '请输入简介', trigger: 'blur' }],
+    description: [{ required: true, message: '请输入详细介绍', trigger: 'blur' }],
+  } : {}),
+}))
 
 const isFreeForm = computed(() => Number(form.original_price) === 0)
 
@@ -344,8 +410,6 @@ function handleSearchModelUpdate(value) {
 }
 
 function onTabChange() {
-  // 切 tab 时重置所有搜索条件，只保留新 resource_type；
-  // 避免携带上一个 tab 的 category_id 等旧筛选导致新 tab 无数据
   const newType = Number(resTab.value)
   Object.assign(searchParams, {
     keyword: '',
@@ -355,36 +419,73 @@ function onTabChange() {
   })
   tableRef.value?.setParams({ ...searchParams })
   tableRef.value?.refresh()
+  loadCategoriesByType(newType)
+  loadSearchCategories(newType)
 }
 
-// 列表行字段是 ItemVO（精简版），编辑时必须拉取详情才能拿到 brief/description/file_url 等
+/** 把历史的 file_url / preview_url 迁移到新 files 数组格式 */
+function migrateToFiles(detail) {
+  let files = []
+  try { files = JSON.parse(detail.extra_files || '[]') } catch { files = [] }
+  // 如果 extra_files 为空，则从旧字段重建，保证历史数据可编辑
+  if (!Array.isArray(files) || files.length === 0) {
+    files = []
+    if (detail.file_url) {
+      files.push({
+        name: detail.file_url.split('/').pop() || '主文件',
+        url: detail.file_url,
+        type: detail.file_type || 'FILE',
+        size: detail.file_size || '',
+        isPreview: false,
+        previewPages: 0,
+      })
+    }
+    if (detail.preview_url) {
+      files.push({
+        name: detail.preview_url.split('/').pop() || '预览文件',
+        url: detail.preview_url,
+        type: detail.file_type || 'FILE',
+        size: '',
+        isPreview: true,
+        previewPages: detail.preview_pages ?? 0,
+      })
+    }
+  } else {
+    // 确保每项都有 isPreview / previewPages 字段（兼容旧格式）
+    files = files.map(f => ({
+      isPreview: false,
+      previewPages: 0,
+      ...f,
+    }))
+  }
+  return files
+}
+
 async function openDialog(row) {
   resetForm()
+  filesError.value = ''
   if (row?.id) {
     detailLoading.value = true
     dialogVisible.value = true
     try {
       const detail = await findResourceById(row.id)
+      const rt = detail.resource_type ?? 1
+      loadCategoriesByType(rt)
       Object.assign(form, {
         id: detail.id,
         title: detail.title || '',
         cover: detail.cover || '',
         category_id: detail.category_id ?? undefined,
-        resource_type: detail.resource_type ?? 1,
-        file_type: detail.file_type || 'PDF',
-        file_url: detail.file_url || '',
-        preview_url: detail.preview_url || '',
-        preview_pages: detail.preview_pages ?? 0,
-        // 接口返回单位为分，表单显示单位为元
+        resource_type: rt,
         original_price: Number(fen2yuan(detail.original_price ?? 0)),
         price: Number(fen2yuan(detail.price ?? 0)),
         update_time: detail.update_time || '',
         status: detail.status ?? 1,
         brief: detail.brief || '',
         description: detail.description || '',
-        file_size: detail.file_size || '',
         pages: detail.pages ?? 0,
         downloads: detail.downloads ?? 0,
+        files: migrateToFiles(detail),
       })
     } catch (e) {
       ElMessage.error(e?.message || '加载详情失败')
@@ -393,9 +494,7 @@ async function openDialog(row) {
       detailLoading.value = false
     }
   } else {
-    Object.assign(form, {
-      resource_type: Number(resTab.value),
-    })
+    Object.assign(form, { resource_type: Number(resTab.value) })
     dialogVisible.value = true
   }
 }
@@ -407,31 +506,47 @@ function resetForm() {
     cover: '',
     category_id: undefined,
     resource_type: Number(resTab.value),
-    file_type: 'PDF',
-    file_url: '',
-    preview_url: '',
-    preview_pages: 0,
     original_price: 0,
     price: 0,
     update_time: '',
     status: 1,
     brief: '',
     description: '',
-    file_size: '',
     pages: 0,
     downloads: 0,
+    files: [],
   })
+  filesError.value = ''
+}
+
+/** 从 files 数组派生后端所需的 file_url/preview_url/file_type 等字段 */
+function buildPayloadFiles() {
+  const previewFile = form.files.find(f => f.isPreview)
+  const mainFile = form.files.find(f => !f.isPreview) || form.files[0]
+  return {
+    file_url: mainFile?.url || '',
+    file_type: mainFile?.type || 'FILE',
+    file_size: mainFile?.size || '',
+    preview_url: previewFile?.url || '',
+    preview_pages: previewFile?.previewPages || 0,
+    extra_files: JSON.stringify(form.files),
+  }
 }
 
 async function submit() {
+  filesError.value = ''
+  if (!form.files.length) {
+    filesError.value = '请至少上传一个文件'
+    return
+  }
   const ok = await formRef.value?.validate().catch(() => false)
   if (!ok) return
   if (Number(form.original_price) === 0) form.price = 0
   submitting.value = true
   try {
-    // 元转分：接口单位仍按分，前端只是显示口径换成元
     const payload = {
       ...form,
+      ...buildPayloadFiles(),
       original_price: yuan2fen(form.original_price),
       price: yuan2fen(form.price),
     }
@@ -442,18 +557,10 @@ async function submit() {
     }
     ElMessage.success('保存成功')
     dialogVisible.value = false
-
-    // 若保存的资源类型与当前 tab 不一致（如把 HR工具 改成调研报告），
-    // 自动切换到对应 tab 后再刷新，否则资源会"消失"在当前 tab
     const savedType = String(form.resource_type)
     if (savedType !== resTab.value) {
       resTab.value = savedType
-      Object.assign(searchParams, {
-        keyword: '',
-        status: '',
-        category_id: undefined,
-        resource_type: Number(savedType),
-      })
+      Object.assign(searchParams, { keyword: '', status: '', category_id: undefined, resource_type: Number(savedType) })
       tableRef.value?.setParams({ ...searchParams })
     }
     tableRef.value?.refresh()
@@ -472,6 +579,54 @@ async function handleDelete(row) {
     tableRef.value?.refresh()
   } catch (e) {
     if (e !== 'cancel') ElMessage.error(e?.message || '删除失败')
+  }
+}
+
+// ===== 文件列表管理 =====
+// 用计数器替代 boolean，支持多文件并发上传时正确跟踪 loading 状态
+const uploadingCount = ref(0)
+const fileUploading = computed(() => uploadingCount.value > 0)
+
+const EXT_TYPE_MAP = { PDF: 'PDF', DOC: 'DOCX', DOCX: 'DOCX', XLS: 'XLSX', XLSX: 'XLSX', PPT: 'PPTX', PPTX: 'PPTX', ZIP: 'ZIP', MP4: 'MP4' }
+const TAG_TYPE_MAP = { PDF: 'danger', DOCX: 'primary', XLSX: 'success', PPTX: 'warning', ZIP: 'info', MP4: '' }
+
+function fileTagType(type) {
+  return TAG_TYPE_MAP[type] || ''
+}
+
+function removeFile(idx) {
+  form.files.splice(idx, 1)
+}
+
+function moveFile(idx, dir) {
+  const to = idx + dir
+  if (to < 0 || to >= form.files.length) return
+  ;[form.files[idx], form.files[to]] = [form.files[to], form.files[idx]]
+}
+
+function togglePreview(idx) {
+  const wasPreview = form.files[idx].isPreview
+  form.files.forEach(f => { f.isPreview = false })
+  if (!wasPreview) form.files[idx].isPreview = true
+}
+
+async function handleFileAdd(file) {
+  if (!file?.raw) return
+  uploadingCount.value++
+  filesError.value = ''
+  try {
+    const { upload } = useUpload()
+    const objectKey = await upload(file.raw, 'resource', { returnObjectKey: true })
+    const ext = (file.name || '').split('.').pop().toUpperCase()
+    const type = EXT_TYPE_MAP[ext] || 'FILE'
+    const sizeKB = file.size ? (file.size / 1024) : 0
+    const sizeStr = sizeKB >= 1024 ? `${(sizeKB / 1024).toFixed(1)}MB` : `${sizeKB.toFixed(0)}KB`
+    form.files.push({ name: file.name, url: objectKey, type, size: sizeStr, isPreview: false, previewPages: 0 })
+    ElMessage.success(`「${file.name}」已上传`)
+  } catch (e) {
+    ElMessage.error(`「${file.name}」上传失败：${e?.message || '未知错误'}`)
+  } finally {
+    uploadingCount.value--
   }
 }
 </script>
@@ -533,5 +688,85 @@ async function handleDelete(row) {
   margin-left: 10px;
   color: var(--el-text-color-secondary);
   font-size: 12px;
+}
+
+/* ===== 统一文件列表面板 ===== */
+.file-list-panel {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.file-list-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  background: var(--el-fill-color-light);
+  border-radius: 6px;
+  border: 1px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.file-list-row.is-preview {
+  border-color: var(--el-color-warning-light-5);
+  background: var(--el-color-warning-light-9);
+}
+
+.file-list-row__info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.file-type-tag {
+  flex-shrink: 0;
+}
+
+.file-list-row__name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-list-row__size {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  flex-shrink: 0;
+}
+
+.file-list-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+
+.preview-pages-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-left: 4px;
+}
+
+.file-list-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--el-text-color-placeholder);
+  font-size: 13px;
+  background: var(--el-fill-color-lighter);
+  border-radius: 6px;
+  border: 1px dashed var(--el-border-color);
+}
+
+.file-list-tip {
+  font-size: 12px;
+  color: var(--el-text-color-placeholder);
+  margin-top: 2px;
 }
 </style>

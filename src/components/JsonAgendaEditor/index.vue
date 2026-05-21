@@ -54,12 +54,14 @@ function hydrate(row) {
   row._end = b || null
 }
 
+// 只在列表引用变化（外部赋值新数组）时 hydrate 未初始化的行。
+// 不用 deep:true，避免用户修改 _start/_end 时触发 hydrate 将时间重置回 row.time 旧值。
 watch(
   () => list.value,
   (val) => {
-    ;(val || []).forEach(hydrate)
+    ;(val || []).forEach(row => { if (row._k == null) hydrate(row) })
   },
-  { immediate: true, deep: true },
+  { immediate: true },
 )
 
 function syncRange(row) {

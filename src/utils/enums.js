@@ -36,13 +36,14 @@ export const ORDER_TYPE = {
 }
 
 // 分类业务类型（与后端 scene 字段一一对应）。
-// 后端 dp_category.scene：1-课程 2-资源(HR工具+调研报告) 3-活动 4-商品。
-// HR工具 / 调研报告 的进一步区分在资源表 dp_resource.resource_type 上做。
+// 后端 dp_category.scene：1-课程 2-内容(旧) 3-活动 4-商品 5-HR工具 6-调研报告。
 export const CATEGORY_BUSINESS_TYPE = {
   1: { label: '课程', type: 'success' },
-  2: { label: '资源', type: 'warning' },
+  2: { label: '内容', type: 'warning' },
   3: { label: '活动', type: 'danger' },
   4: { label: '商品', type: '' },
+  5: { label: 'HR工具', type: 'primary' },
+  6: { label: '调研报告', type: 'info' },
 }
 
 export const ORDER_STATUS = {

@@ -14,10 +14,12 @@
               <el-icon><component :is="menu.icon || 'Menu'" /></el-icon>
               <span>{{ menuTitle(menu.name) }}</span>
             </template>
-            <el-menu-item v-for="child in menu.children" :key="child.name" :index="child.path">
-              <el-icon><component :is="child.icon || 'Menu'" /></el-icon>
-              <span>{{ menuTitle(child.name) }}</span>
-            </el-menu-item>
+            <template v-for="child in menu.children" :key="child.name">
+              <el-menu-item v-if="!SIDEBAR_HIDDEN.has(child.name)" :index="child.path">
+                <el-icon><component :is="child.icon || 'Menu'" /></el-icon>
+                <span>{{ menuTitle(child.name) }}</span>
+              </el-menu-item>
+            </template>
           </el-sub-menu>
         </template>
       </el-menu>
@@ -49,8 +51,8 @@ const nameMap = {
   CourseTeacher: '讲师',
   CourseList: '课程列表',
   CourseProgress: '学习进度',
-  Resource: '资源管理',
-  ResourceList: '资源列表',
+  Resource: '内容管理',
+  ResourceList: '内容列表',
   Activity: '活动管理',
   ActivityList: '活动列表',
   ActivityRegister: '报名管理',
@@ -71,6 +73,10 @@ const nameMap = {
 function menuTitle(name) {
   return nameMap[name] || name
 }
+
+// 在侧边栏隐藏的菜单项（页面仍可通过内部导航访问，只是不在侧边栏显示）。
+// ActivityRegister 已整合进活动列表页内，无需单独菜单入口。
+const SIDEBAR_HIDDEN = new Set(['ActivityRegister'])
 </script>
 
 <style lang="scss" scoped>

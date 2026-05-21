@@ -26,21 +26,38 @@
             label-width="100px"
           >
             <el-row :gutter="16">
-              <el-col :xs="24" :sm="12">
+              <el-col :xs="24" :sm="8">
                 <el-form-item label="分类" prop="category_id">
                   <DictSelect v-model="form.category_id" dict-key="category" style="width: 100%" />
                 </el-form-item>
               </el-col>
-              <el-col :xs="24" :sm="12">
+              <el-col :xs="24" :sm="8">
                 <el-form-item label="上架状态" prop="status">
                   <el-switch v-model="form.status" :active-value="1" :inactive-value="0" />
                   <span class="status-hint">{{ form.status === 1 ? '上架中' : '已下架' }}</span>
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="8">
+                <el-form-item label="开放报名" prop="enroll_open">
+                  <el-switch
+                    v-model="form.enroll_open"
+                    :active-value="1"
+                    :inactive-value="0"
+                    active-color="#67c23a"
+                  />
+                  <span class="status-hint">
+                    {{ form.enroll_open === 1 ? '已手动开放（忽略日期）' : '自动（按活动日期）' }}
+                  </span>
                 </el-form-item>
               </el-col>
             </el-row>
 
             <el-form-item label="活动标题" prop="title">
               <el-input v-model="form.title" maxlength="200" show-word-limit placeholder="请输入活动标题" />
+            </el-form-item>
+
+            <el-form-item label="副标题" prop="subtitle">
+              <el-input v-model="form.subtitle" maxlength="300" show-word-limit placeholder="副标题（选填），显示在主标题下方" />
             </el-form-item>
 
             <el-form-item label="活动封面" prop="cover">
@@ -208,8 +225,17 @@
         <el-form-item label="姓名" required>
           <el-input v-model="speakerForm.name" />
         </el-form-item>
-        <el-form-item label="头衔">
-          <el-input v-model="speakerForm.title" />
+        <el-form-item label="职务/头衔">
+          <el-input v-model="speakerForm.title" placeholder="如：CEO / 首席人力官" />
+        </el-form-item>
+        <el-form-item label="公司">
+          <el-input v-model="speakerForm.company" placeholder="请输入公司名称" />
+        </el-form-item>
+        <el-form-item label="手机号">
+          <el-input v-model="speakerForm.phone" placeholder="请输入手机号" />
+        </el-form-item>
+        <el-form-item label="邮箱">
+          <el-input v-model="speakerForm.email" placeholder="请输入邮箱" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -282,6 +308,7 @@ const formRef = ref(null)
 const form = reactive({
   category_id: undefined,
   title: '',
+  subtitle: '',
   cover: '',
   activity_date: '',
   time_range: '',
@@ -292,6 +319,7 @@ const form = reactive({
   agenda: [],
   description: '',
   status: 1,
+  enroll_open: 0,
 })
 
 const rules = {
@@ -307,14 +335,18 @@ const rules = {
 const spTableRef = ref(null)
 const speakerColumns = [
   { prop: 'avatar', label: '头像', width: 80, slot: 'avatar' },
-  { prop: 'name', label: '姓名', minWidth: 120 },
-  { prop: 'title', label: '头衔', minWidth: 160 },
+  { prop: 'name', label: '姓名', minWidth: 100 },
+  { prop: 'title', label: '职务/头衔', minWidth: 140 },
+  { prop: 'company', label: '公司', minWidth: 140 },
+  { prop: 'phone', label: '手机号', minWidth: 130 },
+  { prop: 'email', label: '邮箱', minWidth: 160 },
+  { prop: 'created_at', label: '添加时间', minWidth: 160, showOverflowTooltip: true },
   { prop: 'actions', label: '操作', width: 140, slot: 'actions' },
 ]
 
 const speakerDialogVisible = ref(false)
 const speakerSaving = ref(false)
-const speakerForm = reactive({ id: null, avatar: '', name: '', title: '' })
+const speakerForm = reactive({ id: null, avatar: '', name: '', title: '', company: '', phone: '', email: '' })
 
 const registerStats = reactive({ enrolled: 0, checked: 0, rate: 0 })
 const registerTableRef = ref(null)
@@ -341,8 +373,11 @@ const registerSearchSchema = [
 
 const registerColumns = [
   { prop: 'id', label: '报名ID', width: 90 },
-  { prop: 'name', label: '姓名', minWidth: 120 },
+  { prop: 'name', label: '姓名', minWidth: 100 },
+  { prop: 'company', label: '公司', minWidth: 140, showOverflowTooltip: true },
+  { prop: 'position', label: '职务', minWidth: 110 },
   { prop: 'phone', label: '手机号', minWidth: 130 },
+  { prop: 'email', label: '邮箱', minWidth: 160, showOverflowTooltip: true },
   { prop: 'register_status', label: '状态', width: 100, slot: 'register_status' },
   { prop: 'created_at', label: '报名时间', minWidth: 170, showOverflowTooltip: true },
   { prop: 'actions', label: '操作', width: 90, slot: 'actions' },
@@ -360,9 +395,21 @@ function syncTabFromQuery() {
 async function loadDetail() {
   if (isCreate.value) return
   const data = await findActivityById(route.params.id)
+  // 解析议程：后端返回 JSON 字符串，需先 parse 再交给 JsonAgendaEditor
+  let parsedAgenda = []
+  try {
+    const raw = data.agenda
+    if (raw) {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+      parsedAgenda = Array.isArray(parsed) ? parsed : []
+    }
+  } catch (_) {
+    parsedAgenda = []
+  }
   Object.assign(form, {
     category_id: data.category_id,
     title: data.title,
+    subtitle: data.subtitle || '',
     cover: data.cover,
     activity_date: data.activity_date,
     time_range: data.time_range,
@@ -371,9 +418,10 @@ async function loadDetail() {
     price: Number(fen2yuan(data.price ?? 0)),
     original_price: Number(fen2yuan(data.original_price ?? 0)),
     limit_count: data.limit_count ?? 0,
-    agenda: Array.isArray(data.agenda) ? JSON.parse(JSON.stringify(data.agenda)) : [],
+    agenda: parsedAgenda,
     description: data.description || '',
     status: Number(data.status ?? 1),
+    enroll_open: Number(data.enroll_open ?? data.enrollOpen ?? 0),
   })
 }
 
@@ -444,9 +492,17 @@ async function saveBase() {
 
 function openSpeakerDialog(row) {
   if (row?.id) {
-    Object.assign(speakerForm, { id: row.id, avatar: row.avatar || '', name: row.name || '', title: row.title || '' })
+    Object.assign(speakerForm, {
+      id: row.id,
+      avatar: row.avatar || '',
+      name: row.name || '',
+      title: row.title || '',
+      company: row.company || '',
+      phone: row.phone || '',
+      email: row.email || '',
+    })
   } else {
-    Object.assign(speakerForm, { id: null, avatar: '', name: '', title: '' })
+    Object.assign(speakerForm, { id: null, avatar: '', name: '', title: '', company: '', phone: '', email: '' })
   }
   speakerDialogVisible.value = true
 }

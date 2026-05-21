@@ -201,6 +201,10 @@ function openDialog(row) {
 async function submit() {
   const ok = await formRef.value?.validate().catch(() => false)
   if (!ok) return
+  if (!form.target_id || Number(form.target_id) <= 0) {
+    ElMessage.error('请先选择跳转目标')
+    return
+  }
   submitting.value = true
   try {
     const payload = { ...form }

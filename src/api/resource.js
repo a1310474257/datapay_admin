@@ -39,6 +39,7 @@ function toBackendPayload(data = {}) {
     previewPages: data.previewPages ?? data.preview_pages ?? 0,
     // previewUrl 同样传 objectKey
     previewUrl: data.previewUrl ?? data.preview_url ?? '',
+    extraFiles: data.extraFiles ?? data.extra_files ?? '[]',
     // 业务更新日期（非系统自动时间戳），需显式传给后端
     updateTime: data.updateTime ?? data.update_time ?? '',
     price: data.price == null ? 0 : Number(data.price),

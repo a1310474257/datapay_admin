@@ -4,7 +4,7 @@ const resourceRoutes = [
     path: 'resource/list',
     name: 'ResourceList',
     component: () => import('@/views/resource/list/index.vue'),
-    meta: { title: '资源列表', icon: 'Document', permission: 'ResourceList' },
+    meta: { title: '内容列表', icon: 'Document', permission: 'ResourceList' },
   },
 ]
 

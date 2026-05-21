@@ -11,8 +11,12 @@ function computeActivityStatus(row) {
   const date = row.activityDate || row.activity_date
   const d = dayjs(date).startOf('day')
   const today = dayjs().startOf('day')
-  if (d.isAfter(today)) return 'upcoming'
+  // 已结束优先级最高，无论 enroll_open 如何设置
   if (d.isBefore(today)) return 'ended'
+  // enroll_open=1：管理员手动强制开放报名，与后端 resolveActivityStatus 保持一致
+  const enrollOpen = row.enrollOpen ?? row.enroll_open
+  if (Number(enrollOpen) === 1) return 'enrolling'
+  if (d.isAfter(today)) return 'upcoming'
   return 'enrolling'
 }
 
@@ -52,9 +56,21 @@ export async function findActivityById(id) {
 }
 
 function toBackendPayload(data = {}) {
+  // 清理议程内部辅助字段（_k/_start/_end），只保留 time/content 存库
+  let agendaStr = ''
+  if (data.agenda) {
+    if (typeof data.agenda === 'string') {
+      agendaStr = data.agenda
+    } else if (Array.isArray(data.agenda)) {
+      agendaStr = JSON.stringify(
+        data.agenda.map(({ time, content }) => ({ time: time || '', content: content || '' }))
+      )
+    }
+  }
   return {
     categoryId: data.category_id ?? data.categoryId ?? 0,
     title: data.title,
+    subtitle: data.subtitle || '',
     cover: data.cover || '',
     description: data.description || '',
     activityDate: data.activity_date || data.activityDate,
@@ -63,8 +79,9 @@ function toBackendPayload(data = {}) {
     price: data.price == null ? 0 : Number(data.price),
     originalPrice: data.original_price ?? data.originalPrice ?? 0,
     limitCount: data.limit_count ?? data.limitCount ?? 0,
-    agenda: typeof data.agenda === 'string' ? data.agenda : (data.agenda ? JSON.stringify(data.agenda) : ''),
+    agenda: agendaStr,
     status: data.status === undefined ? 1 : Number(data.status),
+    enrollOpen: data.enroll_open != null ? Number(data.enroll_open) : (data.enrollOpen != null ? Number(data.enrollOpen) : 0),
   }
 }
 
@@ -96,6 +113,9 @@ export async function saveActivitySpeaker(activityId, data) {
   const payload = {
     name: data.name,
     title: data.title || '',
+    company: data.company || '',
+    phone: data.phone || '',
+    email: data.email || '',
     avatar: data.avatar || '',
     sort: Number(data.sort ?? 0),
   }
@@ -137,6 +157,7 @@ export async function getActivityRegisterList(params = {}) {
     user_nickname: row.userNickname,
     register_status: row.registerStatus,
     register_status_label: row.registerStatusLabel,
+    position: row.position || '',
     created_at: row.createTime,
   })))
 }

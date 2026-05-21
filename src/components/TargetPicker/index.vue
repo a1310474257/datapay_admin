@@ -28,7 +28,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { searchBannerTargets } from '@/api/banner'
 
 const id = defineModel('id', { type: [Number, String], default: null })
@@ -54,10 +54,15 @@ const dialogTitle = computed(() => {
   return map[props.type] || '选择目标'
 })
 
+// 仅在类型或资源子类型发生变化时清空已选目标，避免错绑。
+// mounted 之前为 false，防止在 Dialog 打开时由初始 props 赋值触发误清空。
+const _isMounted = ref(false)
+onMounted(() => { _isMounted.value = true })
+
 watch(
   () => [props.type, props.resourceType],
   () => {
-    // 类型或资源子类型变化后，已选目标可能失效，统一清空避免错绑
+    if (!_isMounted.value) return
     id.value = null
     title.value = ''
   },
