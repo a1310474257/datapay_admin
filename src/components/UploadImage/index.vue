@@ -33,6 +33,7 @@ import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Refresh } from '@element-plus/icons-vue'
 import { useUpload } from '@/hooks/useUpload'
+import { resolveMediaPreviewUrl } from '@/utils/mediaUrl'
 
 const props = defineProps({
   modelValue: {
@@ -68,10 +69,7 @@ const previewVisible = ref(false)
 const previewUrl = ref('')
 
 function resolveImageUrl(value) {
-  if (!value) return ''
-  if (/^https?:\/\//i.test(value) || value.startsWith('data:')) return value
-  if (value.startsWith('image/')) return `/api/file/image?key=${value}`
-  return `/api/file/${encodeURIComponent(value)}`
+  return resolveMediaPreviewUrl(value)
 }
 
 // 根据外部值回显文件列表，保持 Upload 组件与 v-model 同步。

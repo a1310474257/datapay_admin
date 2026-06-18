@@ -90,7 +90,7 @@
       <el-space wrap>
         <el-button v-if="Number(order.status) === 0" type="danger" @click="handleCancel">取消订单</el-button>
         <el-button
-          v-if="Number(order.status) === 1"
+          v-if="Number(order.status) === 1 && Number(order.order_type) === 5"
           v-permission="'order:ship'"
           type="primary"
           @click="openShip(false)"
@@ -98,7 +98,7 @@
           发货
         </el-button>
         <el-button
-          v-if="Number(order.status) === 2"
+          v-if="Number(order.status) === 2 && Number(order.order_type) === 5"
           v-permission="'order:ship'"
           @click="openShip(true)"
         >

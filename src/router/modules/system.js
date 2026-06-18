@@ -13,6 +13,12 @@ const systemRoutes = [
     meta: { title: '管理员', icon: 'Lock', permission: 'SystemAdmin' },
   },
   {
+    path: 'system/privacy',
+    name: 'SystemPrivacy',
+    component: () => import('@/views/system/privacy/index.vue'),
+    meta: { title: '隐私协议', icon: 'DocumentChecked', permission: 'SystemPrivacy' },
+  },
+  {
     path: 'system/role',
     name: 'SystemRole',
     component: () => import('@/views/system/role/index.vue'),

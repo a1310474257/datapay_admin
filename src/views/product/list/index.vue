@@ -52,7 +52,6 @@
         />
       </template>
       <template #price="{ row }">¥ {{ fen2yuan(row.price) }}</template>
-      <template #originalPrice="{ row }">¥ {{ fen2yuan(row.original_price) }}</template>
       <template #stock="{ row }">
         <span :class="{ 'stock-danger': Number(row.stock || 0) === 0 }">{{ row.stock ?? 0 }}</span>
       </template>
@@ -131,7 +130,6 @@ const columns = [
   { prop: 'category_name', label: '分类', minWidth: 100 },
   { prop: 'spec_count', label: '规格数', width: 90 },
   { prop: 'price', label: '售价', width: 110, slot: 'price' },
-  { prop: 'original_price', label: '原价', width: 110, slot: 'originalPrice' },
   { prop: 'stock', label: '库存', width: 90, slot: 'stock' },
   { prop: 'sales', label: '销量', width: 90 },
   { prop: 'status', label: '状态', width: 100, dict: STATUS_ONLINE },

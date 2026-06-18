@@ -48,7 +48,7 @@ export const CATEGORY_BUSINESS_TYPE = {
 
 export const ORDER_STATUS = {
   0: { label: '待付款', type: 'warning' },
-  1: { label: '已付款', type: 'primary' },
+  1: { label: '待发货', type: 'warning' },
   2: { label: '已发货', type: 'primary' },
   3: { label: '已完成', type: 'success' },
   4: { label: '退款中', type: 'warning' },

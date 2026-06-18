@@ -95,6 +95,7 @@
               @name-resolved="(n) => (lesson.video_name = n)"
               @size-resolved="(s) => (lesson.video_size = s)"
               @meta-extracted="(m) => { if (m.duration) lesson.duration_sec = m.duration }"
+              @uploaded="handleLessonUploaded"
             />
           </div>
 
@@ -112,7 +113,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import { Plus, Delete, Check } from '@element-plus/icons-vue'
 import UploadFile from '@/components/UploadFile/index.vue'
 
@@ -192,15 +193,25 @@ function moveLesson(chapter, li, dir) {
   ;[arr[li], arr[to]] = [arr[to], arr[li]]
 }
 
-function handleSave() {
-  // 补齐 sort 字段
-  const tree = localTree.value.map((ch, ci) => ({
+function buildPayloadTree() {
+  return localTree.value.map((ch, ci) => ({
     ...ch,
     sort: ci + 1,
     lessons: (ch.lessons || []).map((les, li) => ({ ...les, sort: li + 1 })),
   }))
+}
+
+function handleSave() {
+  const tree = buildPayloadTree()
   emit('update:tree', tree)
-  emit('save', tree)
+  emit('save', tree, { auto: false })
+}
+
+async function handleLessonUploaded() {
+  await nextTick()
+  const tree = buildPayloadTree()
+  emit('update:tree', tree)
+  emit('save', tree, { auto: true })
 }
 </script>
 

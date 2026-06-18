@@ -111,18 +111,6 @@
                   />
                 </el-form-item>
               </el-col>
-              <el-col :xs="24" :sm="12">
-                <el-form-item label="原价(元)" prop="original_price">
-                  <el-input-number
-                    v-model="form.original_price"
-                    :min="0"
-                    :max="999999"
-                    :precision="2"
-                    :step="1"
-                    style="width: 100%"
-                  />
-                </el-form-item>
-              </el-col>
             </el-row>
 
             <el-form-item label="活动议程" prop="agenda">
@@ -314,7 +302,6 @@ const form = reactive({
   time_range: '',
   location: '',
   price: 0,
-  original_price: 0,
   limit_count: 0,
   agenda: [],
   description: '',
@@ -416,7 +403,6 @@ async function loadDetail() {
     location: data.location,
     // 接口价格单位为分，页面输入单位统一显示为元。
     price: Number(fen2yuan(data.price ?? 0)),
-    original_price: Number(fen2yuan(data.original_price ?? 0)),
     limit_count: data.limit_count ?? 0,
     agenda: parsedAgenda,
     description: data.description || '',
@@ -471,7 +457,6 @@ async function saveBase() {
     const payload = {
       ...form,
       price: yuan2fen(form.price),
-      original_price: yuan2fen(form.original_price),
     }
     if (isCreate.value) {
       const row = await createActivity(payload)
@@ -603,7 +588,7 @@ function downloadTextFile(filename, content) {
 async function exportRegisters() {
   exporting.value = true
   try {
-    const { taskId } = await createRegisterExportTask({ activity_id: route.params.id })
+    const { taskId } = await createRegisterExportTask({ activity_id: route.params.id, activity_title: form.title })
     // 导出任务为本地模拟异步，短轮询直至任务完成或失败。
     // eslint-disable-next-line no-constant-condition
     while (true) {

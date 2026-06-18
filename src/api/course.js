@@ -44,7 +44,7 @@ function toBackendPayload(data = {}) {
     description: data.description || '',
     totalDuration: data.total_duration || data.totalDuration || '',
     price: data.price == null ? 0 : Number(data.price),
-    originalPrice: data.original_price ?? data.originalPrice ?? 0,
+    originalPrice: data.price == null ? 0 : Number(data.price),
     status: data.status === undefined ? 1 : Number(data.status),
   }
 }
@@ -56,6 +56,11 @@ export async function createCourse(data) {
 
 export async function updateCourse(id, data) {
   await request.put(`/admin/courses/${id}`, toBackendPayload(data))
+  return { id }
+}
+
+export async function updateCourseTotalDuration(id, totalDuration) {
+  await request.put(`/admin/courses/${id}`, { totalDuration: totalDuration || '' })
   return { id }
 }
 
@@ -76,8 +81,7 @@ export async function toggleCourseStatus(id, status) {
 }
 
 // ------- 章节/课时（/api/admin/courses/{courseId}/chapters/...） -------
-// 前端 ChapterLessonTree 以“树形”方式批量保存。后端仅提供单条 CRUD，
-// 这里通过“先拉当前树 → 删全部 → 按新树重建”实现。
+// 前端 ChapterLessonTree 以“树形”方式批量保存。
 
 async function fetchChaptersRaw(courseId) {
   const page = await request.get(`/admin/courses/${courseId}/chapters`, {
@@ -127,25 +131,12 @@ export async function getChapters(courseId) {
 
 export async function saveChapters(courseId, tree) {
   const cid = Number(courseId)
-  const existing = await fetchChaptersRaw(cid)
-  // 先删除所有旧章节（后端应级联删除章节下课时）。
-  for (const ch of existing) {
-    // eslint-disable-next-line no-await-in-loop
-    await request.delete(`/admin/courses/${cid}/chapters/${ch.id}`)
-  }
   const list = Array.isArray(tree) ? tree : []
-  for (let i = 0; i < list.length; i += 1) {
-    const ch = list[i]
-    // eslint-disable-next-line no-await-in-loop
-    const chapterId = await request.post(`/admin/courses/${cid}/chapters`, {
+  await request.put(`/admin/courses/${cid}/chapters/tree`, {
+    chapters: list.map((ch, i) => ({
       title: ch.title || `章节 ${i + 1}`,
       sort: Number(ch.sort ?? i + 1),
-    })
-    const lessons = Array.isArray(ch.lessons) ? ch.lessons : []
-    for (let j = 0; j < lessons.length; j += 1) {
-      const les = lessons[j]
-      // eslint-disable-next-line no-await-in-loop
-      await request.post(`/admin/courses/${cid}/chapters/${chapterId}/lessons`, {
+      lessons: (Array.isArray(ch.lessons) ? ch.lessons : []).map((les, j) => ({
         title: les.title || `课时 ${j + 1}`,
         durationSec: Number(les.duration_sec || 0),
         videoUrl: les.video_url || '',
@@ -153,9 +144,9 @@ export async function saveChapters(courseId, tree) {
         videoName: les.video_name || '',
         isFree: Number(les.is_free ?? 0),
         sort: Number(les.sort ?? j + 1),
-      })
-    }
-  }
+      })),
+    })),
+  })
   return { success: true }
 }
 

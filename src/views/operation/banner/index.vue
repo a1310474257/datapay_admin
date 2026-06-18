@@ -78,6 +78,7 @@ import TargetPicker from '@/components/TargetPicker/index.vue'
 import { BANNER_TYPE, RESOURCE_TYPE, STATUS_ENABLE } from '@/utils/enums'
 import { createBanner, deleteBanner, getBannerList, updateBanner } from '@/api/banner'
 import { useTable } from '@/hooks/useTable'
+import { resolveMediaPreviewUrl } from '@/utils/mediaUrl'
 
 const { tableRef, searchParams, loadData, onSearch } = useTable({
   loadApi: getBannerList,
@@ -147,11 +148,7 @@ function handleSearchModelUpdate(value) {
 }
 
 function resolveBannerImage(value) {
-  if (!value) return ''
-  if (/^https?:\/\//i.test(value) || value.startsWith('data:')) return value
-  // 轮播图改为存 objectKey，列表展示通过文件中转下载接口查看
-  if (value.startsWith('image/')) return `/api/file/image?key=${value}`
-  return `/api/file/${encodeURIComponent(value)}`
+  return resolveMediaPreviewUrl(value)
 }
 
 function onTypeChange() {

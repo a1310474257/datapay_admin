@@ -146,6 +146,7 @@ async function handleExport() {
   try {
     const { taskId } = await createRegisterExportTask({
       activity_id: exportActivityId.value || searchParams.activity_id,
+      activity_title: activityOptions.value.find((item) => item.value === (exportActivityId.value || searchParams.activity_id))?.label || '',
     })
     const poll = async () => {
       const task = await getExportTask(taskId)

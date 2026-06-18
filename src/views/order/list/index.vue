@@ -91,9 +91,9 @@
           >
             发货
           </el-button>
-          <!-- 虚拟商品（课程/HR工具/报告/活动）支付后直接可完成，不经过发货状态 -->
+          <!-- 虚拟商品（课程/HR工具/报告/活动）支付后由后端自动交付为已发货，不经过待发货状态 -->
           <el-button
-            v-if="Number(row.status) === 1 && Number(row.order_type) !== 5"
+            v-if="Number(row.status) === 2 && Number(row.order_type) !== 5"
             v-permission="'order:complete'"
             link
             type="success"
@@ -102,7 +102,7 @@
             完成
           </el-button>
           <el-button
-            v-if="Number(row.status) === 2"
+            v-if="Number(row.status) === 2 && Number(row.order_type) === 5"
             v-permission="'order:ship'"
             link
             @click="openShip(row, true)"
@@ -110,7 +110,7 @@
             改运单
           </el-button>
           <el-button
-            v-if="Number(row.status) === 2"
+            v-if="Number(row.status) === 2 && Number(row.order_type) === 5"
             v-permission="'order:complete'"
             link
             type="success"
@@ -189,7 +189,7 @@ const { tableRef, searchParams, loadData, onSearch } = useTable({
 const statusTabs = [
   { label: '全部', value: '' },
   { label: '待付款', value: '0' },
-  { label: '已付款', value: '1' },
+  { label: '待发货', value: '1' },
   { label: '已发货', value: '2' },
   { label: '已完成', value: '3' },
   { label: '退款中', value: '4' },

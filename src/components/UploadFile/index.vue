@@ -50,6 +50,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  folder: {
+    type: String,
+    default: 'file',
+  },
   /**
    * 为 true 时上传成功后向父组件 emit objectKey（BOS 对象路径，不含 host），
    * 用于受保护文件（资源正文等）——后端通过 /api/file/{objectKey} 代理下载。
@@ -75,7 +79,7 @@ const props = defineProps({
  * size-resolved：上传成功后 emit 格式化后的文件大小字符串（如 "1.2 MB"），
  * 父组件可将其持久化，用于列表展示。
  */
-const emit = defineEmits(['update:modelValue', 'meta-extracted', 'name-resolved', 'size-resolved'])
+const emit = defineEmits(['update:modelValue', 'meta-extracted', 'name-resolved', 'size-resolved', 'uploaded'])
 
 /** 将字节数格式化为人类可读的文件大小字符串 */
 function formatFileSize(bytes) {
@@ -158,7 +162,7 @@ async function handleChange(file) {
   // 上传前记录原始文件名，上传成功后可在文件列表中显示真实名称而非 BOS UUID
   displayName.value = file.raw.name || ''
   try {
-    const value = await upload(file.raw, 'file', {
+    const value = await upload(file.raw, props.folder, {
       returnObjectKey: props.useObjectKey,
       onProgress: (pct) => { /* uploadProgress 已在 useUpload 内部更新 */ void pct },
     })
@@ -174,6 +178,12 @@ async function handleChange(file) {
       const meta = await extractVideoMeta(file.raw)
       emit('meta-extracted', meta)
     }
+    emit('uploaded', {
+      value,
+      name: displayName.value,
+      size: sizeStr,
+      raw: file.raw,
+    })
   } catch (error) {
     displayName.value = ''
     ElMessage.error(error?.message || '上传失败')

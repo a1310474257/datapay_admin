@@ -20,7 +20,6 @@ export function seedResource(db) {
       preview_url: `https://example.com/resource/preview/${i}.pdf`,
       downloads: faker.number.int({ min: 100, max: 5000 }),
       price: faker.number.int({ min: 9900, max: 59900 }),
-      original_price: faker.number.int({ min: 19900, max: 89900 }),
       update_time: dateOnly(),
       status: 1,
       created_at: dt(),

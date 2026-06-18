@@ -19,7 +19,12 @@ RUN --mount=type=cache,target=/root/.npm \
 
 # ------------------------ runtime ------------------------
 FROM nginx:1.27-alpine AS runtime
-RUN apk add --no-cache tzdata && \
+RUN alpine_version="$(cut -d. -f1,2 /etc/alpine-release)" && \
+    printf '%s\n' \
+      "https://mirrors.aliyun.com/alpine/v${alpine_version}/main" \
+      "https://mirrors.aliyun.com/alpine/v${alpine_version}/community" \
+      > /etc/apk/repositories && \
+    apk add --no-cache tzdata && \
     cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     echo "Asia/Shanghai" > /etc/timezone
 

@@ -1,15 +1,17 @@
 import { ref } from 'vue'
 import request from '@/api/request'
 
+const BOS_DIRECT_UPLOAD_ENABLED = import.meta.env.VITE_BOS_DIRECT_UPLOAD === 'true'
+
 /**
  * 文件上传 Hook：对接后端 /api/admin/upload/{image,video,file}
  *
- * 视频文件优先走「预签名直传」路径：
+ * 文件优先走「预签名直传」路径：
  *   1. 调 /api/admin/upload/presign 拿到 BOS 预签名 PUT URL + objectKey
  *   2. 用 XMLHttpRequest 直接 PUT 到 BOS（进度条反映真实 BOS 上传进度）
  *   3. 上传完毕后返回 objectKey
  *
- * 若 BOS 未启用（fallback=true），或非视频文件，仍走原有 multipart 路径。
+ * 若 BOS 未启用（fallback=true）或直传失败，仍走原有 multipart 路径。
  */
 export function useUpload() {
   const uploading = ref(false)
@@ -28,11 +30,12 @@ export function useUpload() {
    * 获取 BOS 预签名 PUT URL。
    * 返回 { objectKey, uploadUrl, contentType, fallback }
    */
-  async function fetchPresign(file) {
+  async function fetchPresign(file, folder) {
     const type = String(file?.type || '').startsWith('video/') ? 'video'
       : String(file?.type || '').startsWith('image/') ? 'image'
       : 'file'
     const params = new URLSearchParams({ type, filename: file.name || '' })
+    if (folder) params.set('dir', folder)
     const data = await request.get(`/admin/upload/presign?${params}`)
     return data
   }
@@ -79,29 +82,34 @@ export function useUpload() {
     syncing.value = false
     uploadProgress.value = 0
     try {
-      const isVideo = String(file?.type || '').startsWith('video/')
-
-      // 视频文件尝试预签名直传
-      if (isVideo) {
+      // 开启后优先预签名直传 BOS；失败时自动降级到后端 multipart 上传。
+      if (BOS_DIRECT_UPLOAD_ENABLED) {
         let presign
         try {
-          presign = await fetchPresign(file)
+          presign = await fetchPresign(file, folder)
         } catch (_) {
           presign = null
         }
 
         if (presign && !presign.fallback && presign.uploadUrl) {
-          // ── 直传路径 ──────────────────────────────────────────
-          await putToBos(presign.uploadUrl, file, presign.contentType, onProgress)
-          uploadProgress.value = 100
-          return presign.objectKey || ''
+          try {
+            // ── 直传路径 ──────────────────────────────────────────
+            await putToBos(presign.uploadUrl, file, presign.contentType, onProgress)
+            uploadProgress.value = 100
+            return returnObjectKey ? (presign.objectKey || '') : (presign.url || presign.objectKey || '')
+          } catch (error) {
+            // BOS Bucket CORS 或临时网络异常时，自动降级到后端 multipart 上传。
+            console.warn('[Upload] BOS direct upload failed, fallback to multipart:', error)
+            uploadProgress.value = 0
+            syncing.value = false
+          }
         }
       }
 
       // ── multipart 路径（图片/文件，或视频 BOS 未启用时的降级）──
       const formData = new FormData()
       formData.append('file', file)
-      if (folder) formData.append('folder', folder)
+      if (folder) formData.append('dir', folder)
       const endpoint = pickEndpoint(file)
       const isVideoFallback = String(file?.type || '').startsWith('video/')
       const timeout = isVideoFallback ? 60 * 60 * 1000 : 10 * 60 * 1000

@@ -142,6 +142,13 @@ const COMMON_ALIAS_MAP = [
   ['statusLabel', 'status_label'],
   ['typeLabel', 'type_label'],
   ['lastLoginAt', 'last_login_at'],
+  ['realName', 'real_name'],
+  ['profileCompleted', 'profile_completed'],
+  ['privacyAgreed', 'privacy_agreed'],
+  ['privacyAgreedAt', 'privacy_agreed_at'],
+  ['verifyCode', 'verify_code'],
+  ['activityId', 'activity_id'],
+  ['activityTitle', 'activity_title'],
 ]
 
 /**

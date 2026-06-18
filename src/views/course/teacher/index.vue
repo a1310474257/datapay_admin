@@ -67,6 +67,7 @@ import { STATUS_ENABLE } from '@/utils/enums'
 import { createTeacher, deleteTeacher, getTeacherList, updateTeacher } from '@/api/teacher'
 import { useTable } from '@/hooks/useTable'
 import { useDictStore } from '@/stores/dict'
+import { resolveMediaPreviewUrl } from '@/utils/mediaUrl'
 
 const dictStore = useDictStore()
 const { tableRef, searchParams, loadData, onSearch } = useTable({
@@ -144,10 +145,7 @@ function resetForm() {
  * 2. objectKey 统一通过后端 /api/file 中转访问，避免前端直连对象存储。
  */
 function resolveTeacherAvatar(value) {
-  if (!value) return ''
-  if (/^https?:\/\//i.test(value) || value.startsWith('data:')) return value
-  if (value.startsWith('image/')) return `/api/file/image?key=${value}`
-  return `/api/file/${encodeURIComponent(value)}`
+  return resolveMediaPreviewUrl(value)
 }
 
 function openCreateDialog() {

@@ -23,9 +23,6 @@
       <template #price="{ row }">
         ¥ {{ fen2yuan(row.price) }}
       </template>
-      <template #originalPrice="{ row }">
-        ¥ {{ fen2yuan(row.original_price) }}
-      </template>
       <template #actions="{ row }">
         <el-space>
           <el-button v-permission="'course:update'" link type="primary" @click="goEdit(row)">编辑</el-button>
@@ -90,7 +87,6 @@ const columns = [
   { prop: 'category_id', label: '分类', minWidth: 120, slot: 'category' },
   { prop: 'teacher_name', label: '讲师', minWidth: 130 },
   { prop: 'price', label: '售价', minWidth: 100, slot: 'price' },
-  { prop: 'original_price', label: '原价', minWidth: 100, slot: 'originalPrice' },
   { prop: 'sales', label: '销量', width: 90 },
   { prop: 'status', label: '状态', width: 100, dict: STATUS_ONLINE },
   { prop: 'created_at', label: '创建时间', minWidth: 170 },

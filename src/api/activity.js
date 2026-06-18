@@ -77,7 +77,7 @@ function toBackendPayload(data = {}) {
     timeRange: data.time_range || data.timeRange,
     location: data.location,
     price: data.price == null ? 0 : Number(data.price),
-    originalPrice: data.original_price ?? data.originalPrice ?? 0,
+    originalPrice: data.price == null ? 0 : Number(data.price),
     limitCount: data.limit_count ?? data.limitCount ?? 0,
     agenda: agendaStr,
     status: data.status === undefined ? 1 : Number(data.status),
@@ -224,6 +224,7 @@ export async function createRegisterExportTask(filters = {}) {
   exportTasks[taskId] = { status: 'processing', progress: 10 }
   try {
     const activityId = filters.activity_id
+    const activityTitle = filters.activity_title || filters.activityTitle || ''
     let page = 1
     const rows = []
     while (true) { // eslint-disable-line no-constant-condition
@@ -235,9 +236,41 @@ export async function createRegisterExportTask(filters = {}) {
       if (rows.length >= normalized.total || normalized.list.length === 0) break
       page += 1
     }
-    const header = 'id,activityId,userId,name,phone,registerStatus,createTime\n'
-    const body = rows.map((r) => [r.id, r.activityId, r.userId, r.name, r.phone, r.registerStatus, r.createTime].join(',')).join('\n')
-    const csv = `\ufeff${header}${body}`
+    const header = [
+      '报名ID',
+      '活动ID',
+      '活动名称',
+      '用户ID',
+      '用户昵称',
+      '姓名',
+      '手机号',
+      '公司',
+      '职务',
+      '邮箱',
+      '订单ID',
+      '核销码',
+      '备注',
+      '报名状态',
+      '报名时间',
+    ]
+    const body = rows.map((r) => toCsvRow([
+      r.id,
+      r.activityId,
+      r.activityTitle || r.activity_title || activityTitle,
+      r.userId,
+      r.userNickname || r.user_nickname || '',
+      r.name,
+      r.phone,
+      r.company,
+      r.position,
+      r.email,
+      r.orderId || r.order_id || '',
+      r.verifyCode || r.verify_code || '',
+      r.remark || '',
+      r.registerStatusLabel || statusLabel(r.registerStatus),
+      r.createTime || r.createdAt || r.created_at,
+    ])).join('\n')
+    const csv = `\ufeff${toCsvRow(header)}\n${body}`
     exportTasks[taskId] = { status: 'done', progress: 100, downloadText: csv, fileName: `activity-register-${taskId}.csv` }
   } catch (e) {
     exportTasks[taskId] = { status: 'failed', message: e?.message || '导出失败' }
@@ -247,4 +280,18 @@ export async function createRegisterExportTask(filters = {}) {
 
 export async function getExportTask(taskId) {
   return exportTasks[Number(taskId)] || { status: 'failed', message: '任务不存在' }
+}
+
+function statusLabel(value) {
+  const status = Number(value)
+  if (status === 2) return '已签到'
+  if (status === 1) return '已报名'
+  return value == null ? '' : String(value)
+}
+
+function toCsvRow(values = []) {
+  return values.map((value) => {
+    const text = value == null ? '' : String(value)
+    return `"${text.replace(/"/g, '""')}"`
+  }).join(',')
 }

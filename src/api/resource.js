@@ -43,7 +43,7 @@ function toBackendPayload(data = {}) {
     // 业务更新日期（非系统自动时间戳），需显式传给后端
     updateTime: data.updateTime ?? data.update_time ?? '',
     price: data.price == null ? 0 : Number(data.price),
-    originalPrice: data.originalPrice ?? data.original_price ?? 0,
+    originalPrice: data.price == null ? 0 : Number(data.price),
     status: data.status === undefined ? 1 : Number(data.status),
   }
 }

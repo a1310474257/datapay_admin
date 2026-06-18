@@ -18,7 +18,6 @@ export function seedActivity(db) {
       time_range: '14:00-17:00',
       location: `会议中心${i}号厅`,
       price: faker.number.int({ min: 0, max: 29900 }),
-      original_price: faker.number.int({ min: 19900, max: 39900 }),
       limit_count: limitCount,
       enrolled_count: enrolledCount,
       agenda: [

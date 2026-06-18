@@ -66,6 +66,7 @@ function handleChange(editor) {
 const toolbarConfig = {
   toolbarKeys: [
     'headerSelect',
+    'fontFamily',
     'bold',
     'italic',
     'underline',
@@ -85,6 +86,17 @@ async function defaultUploadImage(file) {
 
 const editorConfig = computed(() => ({
   MENU_CONF: {
+    fontFamily: {
+      fontFamilyList: [
+        '宋体',
+        '黑体',
+        '微软雅黑',
+        '楷体',
+        '仿宋',
+        'Arial',
+        'Times New Roman',
+      ],
+    },
     uploadImage: {
       // 统一由外部函数或 mock 返回 URL，再插入到编辑器内容中。
       async customUpload(file, insertFn) {

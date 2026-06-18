@@ -8,7 +8,6 @@
 export function resolveMediaPreviewUrl(value) {
   if (!value) return ''
   if (/^https?:\/\//i.test(value) || value.startsWith('data:')) return value
-  if (value.startsWith('image/')) return `/api/file/image?key=${value}`
   // 按路径段分别编码，保留 "/" 作为真实路径分隔符；
   // 如果对整个 objectKey 用 encodeURIComponent，"/" 会变成 "%2F"，
   // Spring Boot 默认拒绝路径变量中的编码斜杠，返回 400。

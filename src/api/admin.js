@@ -49,7 +49,7 @@ const ALL_PERMISSIONS = [
   'Activity', 'ActivityList', 'ActivityRegister',
   'Product', 'ProductList',
   'Order', 'OrderList', 'OrderRefund', 'OrderPayRecord',
-  'System', 'SystemProfile', 'SystemAdmin', 'SystemRole', 'SystemLog',
+  'System', 'SystemProfile', 'SystemAdmin', 'SystemPrivacy', 'SystemRole', 'SystemLog',
   // 按钮级权限码
   'category:create', 'category:update', 'category:delete',
   'user:ban', 'user:unban', 'user:detail',
@@ -114,6 +114,7 @@ const MENUS = [
     path: '/system', name: 'System', icon: 'Setting', children: [
       { path: '/system/profile', name: 'SystemProfile', icon: 'UserFilled' },
       { path: '/system/admin', name: 'SystemAdmin', icon: 'Lock' },
+      { path: '/system/privacy', name: 'SystemPrivacy', icon: 'DocumentChecked' },
       { path: '/system/role', name: 'SystemRole', icon: 'Key' },
       { path: '/system/log', name: 'SystemLog', icon: 'DocumentCopy' },
     ],

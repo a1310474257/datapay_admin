@@ -65,6 +65,7 @@ const nameMap = {
   System: '系统设置',
   SystemProfile: '个人信息',
   SystemAdmin: '管理员',
+  SystemPrivacy: '隐私协议',
   SystemRole: '角色权限',
   SystemLog: '操作日志',
 }

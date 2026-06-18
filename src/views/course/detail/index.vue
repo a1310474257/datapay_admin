@@ -41,9 +41,6 @@
             <el-form-item label="售价" prop="price">
               <PriceInput v-model="formModel.price" />
             </el-form-item>
-            <el-form-item label="原价" prop="original_price">
-              <PriceInput v-model="formModel.original_price" />
-            </el-form-item>
             <el-form-item label="状态" prop="status">
               <el-switch v-model="formModel.status" :active-value="1" :inactive-value="0" />
             </el-form-item>
@@ -148,6 +145,7 @@ import {
   saveMaterial,
   deleteMaterial,
   updateCourse,
+  updateCourseTotalDuration,
 } from '@/api/course'
 import { useDictStore } from '@/stores/dict'
 
@@ -167,7 +165,6 @@ const formModel = reactive({
   description: '',
   total_duration: '',
   price: 0,
-  original_price: 0,
   status: 1,
   chapter_count: 0,
   sales: 0,
@@ -182,11 +179,11 @@ const rules = {
   cover: [{ required: true, message: '请上传课程封面', trigger: 'change' }],
   description: [{ required: true, message: '请输入课程详情', trigger: 'change' }],
   price: [{ required: true, message: '请输入售价', trigger: 'change' }],
-  original_price: [{ required: true, message: '请输入原价', trigger: 'change' }],
 }
 
 const chapterTree = ref([])
 const chapterSaving = ref(false)
+const pendingChapterSave = ref(null)
 
 const matTableRef = ref(null)
 const matDialog = ref(false)
@@ -231,7 +228,6 @@ function assignForm(data = {}) {
     description: data.description || '',
     total_duration: data.total_duration || '',
     price: Number(data.price || 0),
-    original_price: Number(data.original_price || 0),
     status: Number(data.status ?? 1),
     chapter_count: Number(data.chapter_count || 0),
     sales: Number(data.sales || 0),
@@ -268,18 +264,54 @@ async function onTabChange(name) {
   if (name === 'material') matTableRef.value?.refresh()
 }
 
-async function saveChapterTree() {
+async function saveChapterTree(treeArg, options = {}) {
   if (isCreateMode.value) return
+  const tree = Array.isArray(treeArg) ? treeArg : chapterTree.value
+  chapterTree.value = tree
+  const totalDuration = formatTotalDuration(sumLessonDurationSec(tree))
+  formModel.total_duration = totalDuration
+  if (chapterSaving.value) {
+    pendingChapterSave.value = { tree, options: { auto: true } }
+    return
+  }
   chapterSaving.value = true
   try {
-    await saveChapters(route.params.id, chapterTree.value)
-    ElMessage.success('章节已保存')
-    await loadChapterData()
+    await saveChapters(route.params.id, tree)
+    await updateCourseTotalDuration(route.params.id, totalDuration)
+    ElMessage.success(options.auto ? '视频已上传，课时与总时长已自动保存' : '章节与总时长已保存')
+    if (!options.auto) {
+      await loadChapterData()
+    }
   } catch (e) {
-    ElMessage.error(e?.message || '保存失败')
+    ElMessage.error(options.auto ? (e?.message || '视频已上传，但自动保存失败，请手动保存章节') : (e?.message || '保存失败'))
   } finally {
     chapterSaving.value = false
+    const pending = pendingChapterSave.value
+    pendingChapterSave.value = null
+    if (pending) {
+      saveChapterTree(pending.tree, pending.options)
+    }
   }
+}
+
+function sumLessonDurationSec(tree = []) {
+  return (tree || []).reduce((chapterTotal, chapter) => {
+    const lessonTotal = (chapter.lessons || []).reduce((total, lesson) => {
+      const sec = Number(lesson.duration_sec ?? lesson.durationSec ?? 0)
+      return total + (Number.isFinite(sec) && sec > 0 ? Math.round(sec) : 0)
+    }, 0)
+    return chapterTotal + lessonTotal
+  }, 0)
+}
+
+function formatTotalDuration(totalSec) {
+  const safeSec = Number.isFinite(Number(totalSec)) && Number(totalSec) > 0 ? Math.round(Number(totalSec)) : 0
+  const hours = Math.floor(safeSec / 3600)
+  const minutes = Math.floor((safeSec % 3600) / 60)
+  if (hours > 0 && minutes > 0) return `${hours}小时${minutes}分钟`
+  if (hours > 0) return `${hours}小时`
+  if (minutes > 0) return `${minutes}分钟`
+  return '0分钟'
 }
 
 function loadMaterials(params) {

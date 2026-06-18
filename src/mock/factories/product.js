@@ -11,7 +11,6 @@ export function seedProduct(db) {
       brief: `商品 ${i} 的一句话卖点，便于列表展示。`,
       description: richText(`Product ${i}`),
       price: faker.number.int({ min: 9900, max: 89900 }),
-      original_price: faker.number.int({ min: 12900, max: 129900 }),
       stock: faker.number.int({ min: 50, max: 600 }),
       sales: faker.number.int({ min: 10, max: 800 }),
       status: 1,

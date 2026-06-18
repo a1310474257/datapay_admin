@@ -15,7 +15,6 @@ export function seedCourse(db) {
       description: richText(`Course ${i}`),
       total_duration: `${faker.number.int({ min: 8, max: 48 })}h`,
       price: faker.number.int({ min: 19900, max: 129900 }),
-      original_price: faker.number.int({ min: 29900, max: 169900 }),
       sales: faker.number.int({ min: 20, max: 2000 }),
       chapter_count: 4,
       status: 1,

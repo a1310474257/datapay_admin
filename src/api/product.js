@@ -1,7 +1,7 @@
 import request from './request'
 import { fromBackendPage, makeRowMapper, toBackendParams, withAliases } from './adapter'
 
-// 行映射：前端历史字段保持兼容（category_id / original_price 等）
+// 行映射：前端历史字段保持兼容（category_id 等）
 function mapProductRow(row) {
   if (!row) return row
   return withAliases(row)
@@ -74,7 +74,7 @@ function toBackendPayload(data = {}, { includeImagesSpecs = false } = {}) {
     cover: data.cover,
     description: data.description,
     price: data.price === undefined ? undefined : Number(data.price),
-    originalPrice: data.originalPrice ?? data.original_price,
+    originalPrice: data.price === undefined ? undefined : Number(data.price),
     stock: data.stock === undefined ? undefined : Number(data.stock),
     status: data.status === undefined ? undefined : Number(data.status),
   }
@@ -88,7 +88,7 @@ function toBackendPayload(data = {}, { includeImagesSpecs = false } = {}) {
 // 创建：POST /api/admin/products
 export async function createProduct(data) {
   const payload = toBackendPayload(data, { includeImagesSpecs: true })
-  // 创建时 originalPrice 若未填则置 0，防止后端校验失败
+  // 保留后端字段兼容并同步为售价，防止后端旧校验失败。
   if (payload.originalPrice == null) payload.originalPrice = 0
   const id = await request.post('/admin/products', payload)
   return { id }

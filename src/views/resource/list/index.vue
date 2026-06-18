@@ -40,7 +40,7 @@
         />
       </template>
 
-      <!-- 售价：原价为 0 视作免费 -->
+      <!-- 售价：售价为 0 视作免费 -->
       <template #price="{ row }">
         <span :class="{ 'free-tag': isFreeRow(row) }">
           {{ isFreeRow(row) ? '免费' : `¥ ${fen2yuan(row.price)}` }}
@@ -170,28 +170,28 @@
               :on-change="handleFileAdd"
             >
               <el-button size="small" :loading="fileUploading" type="primary" plain>
-                + 上传文件（可多选）
+                {{ fileUploading ? `上传中 ${uploadingCount} / 排队 ${uploadQueue.length}` : '+ 上传文件（可多选）' }}
               </el-button>
             </el-upload>
-            <div class="file-list-tip">支持 PDF / Word / Excel / PPT / ZIP / MP4；可多选批量上传，新文件追加到末尾；最多指定一个文件为「预览文件」</div>
+            <div class="file-list-tip">支持 PDF / Word / Excel / PPT / ZIP / MP4；可多选批量上传，新文件追加到末尾；最多指定一个文件为「预览文件」；批量上传会按 {{ MAX_UPLOAD_CONCURRENCY }} 个并发受控执行，避免页面卡顿</div>
+            <div v-if="uploadIssueFiles.length" class="upload-issues">
+              <div class="upload-issues__header">
+                <span>上传失败/跳过文件</span>
+                <el-button link type="primary" size="small" @click="clearUploadIssues">清空</el-button>
+              </div>
+              <div
+                v-for="item in uploadIssueFiles"
+                :key="`${item.name}-${item.time}`"
+                class="upload-issues__item"
+              >
+                <span class="upload-issues__name" :title="item.name">{{ item.name }}</span>
+                <span class="upload-issues__reason">{{ item.reason }}</span>
+              </div>
+            </div>
           </div>
         </el-form-item>
 
         <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="原价(元)" prop="original_price">
-              <!-- 表单单位为元；提交时元转分（接口仍按分） -->
-              <el-input-number
-                v-model="form.original_price"
-                :min="0"
-                :max="999999"
-                :precision="2"
-                :step="1"
-                style="width: 100%"
-                @change="onPriceChange"
-              />
-            </el-form-item>
-          </el-col>
           <el-col :span="12">
             <el-form-item label="售价(元)" prop="price">
               <el-input-number
@@ -200,20 +200,11 @@
                 :max="999999"
                 :precision="2"
                 :step="1"
-                :disabled="isFreeForm"
                 style="width: 100%"
               />
             </el-form-item>
           </el-col>
         </el-row>
-
-        <el-alert
-          v-if="isFreeForm"
-          class="free-alert"
-          title="原价为 0 时该资源视为免费，售价已锁定为 0"
-          type="success"
-          :closable="false"
-        />
 
         <!-- 调研报告必填简介；HR工具可选 -->
         <el-form-item v-if="form.resource_type === 2" label="简介" prop="brief">
@@ -369,7 +360,6 @@ const form = reactive({
   cover: '',
   category_id: undefined,
   resource_type: 1,
-  original_price: 0,
   price: 0,
   update_time: '',
   status: 1,
@@ -382,6 +372,7 @@ const form = reactive({
 
 // 文件列表错误提示（手动校验）
 const filesError = ref('')
+const uploadIssueFiles = ref([])
 
 const rules = computed(() => ({
   title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
@@ -393,16 +384,8 @@ const rules = computed(() => ({
   } : {}),
 }))
 
-const isFreeForm = computed(() => Number(form.original_price) === 0)
-
 function isFreeRow(row) {
-  return Number(row.original_price) === 0
-}
-
-function onPriceChange() {
-  if (Number(form.original_price) === 0) {
-    form.price = 0
-  }
+  return Number(row.price) === 0
 }
 
 function handleSearchModelUpdate(value) {
@@ -464,6 +447,7 @@ function migrateToFiles(detail) {
 async function openDialog(row) {
   resetForm()
   filesError.value = ''
+  clearUploadIssues()
   if (row?.id) {
     detailLoading.value = true
     dialogVisible.value = true
@@ -477,7 +461,6 @@ async function openDialog(row) {
         cover: detail.cover || '',
         category_id: detail.category_id ?? undefined,
         resource_type: rt,
-        original_price: Number(fen2yuan(detail.original_price ?? 0)),
         price: Number(fen2yuan(detail.price ?? 0)),
         update_time: detail.update_time || '',
         status: detail.status ?? 1,
@@ -506,7 +489,6 @@ function resetForm() {
     cover: '',
     category_id: undefined,
     resource_type: Number(resTab.value),
-    original_price: 0,
     price: 0,
     update_time: '',
     status: 1,
@@ -517,6 +499,7 @@ function resetForm() {
     files: [],
   })
   filesError.value = ''
+  clearUploadIssues()
 }
 
 /** 从 files 数组派生后端所需的 file_url/preview_url/file_type 等字段 */
@@ -535,19 +518,21 @@ function buildPayloadFiles() {
 
 async function submit() {
   filesError.value = ''
+  if (fileUploading.value) {
+    ElMessage.warning('文件仍在上传，请等待上传完成后再保存')
+    return
+  }
   if (!form.files.length) {
     filesError.value = '请至少上传一个文件'
     return
   }
   const ok = await formRef.value?.validate().catch(() => false)
   if (!ok) return
-  if (Number(form.original_price) === 0) form.price = 0
   submitting.value = true
   try {
     const payload = {
       ...form,
       ...buildPayloadFiles(),
-      original_price: yuan2fen(form.original_price),
       price: yuan2fen(form.price),
     }
     if (form.id) {
@@ -583,9 +568,13 @@ async function handleDelete(row) {
 }
 
 // ===== 文件列表管理 =====
-// 用计数器替代 boolean，支持多文件并发上传时正确跟踪 loading 状态
+// 批量上传采用受控并发池，避免大批文件同时上传挤占浏览器和后端连接。
 const uploadingCount = ref(0)
-const fileUploading = computed(() => uploadingCount.value > 0)
+const uploadQueue = ref([])
+const MAX_UPLOAD_CONCURRENCY = 3
+const uploadingTotal = computed(() => uploadingCount.value + uploadQueue.value.length)
+const fileUploading = computed(() => uploadingTotal.value > 0)
+const uploadingFileNames = new Set()
 
 const EXT_TYPE_MAP = { PDF: 'PDF', DOC: 'DOCX', DOCX: 'DOCX', XLS: 'XLSX', XLSX: 'XLSX', PPT: 'PPTX', PPTX: 'PPTX', ZIP: 'ZIP', MP4: 'MP4' }
 const TAG_TYPE_MAP = { PDF: 'danger', DOCX: 'primary', XLSX: 'success', PPTX: 'warning', ZIP: 'info', MP4: '' }
@@ -610,23 +599,76 @@ function togglePreview(idx) {
   if (!wasPreview) form.files[idx].isPreview = true
 }
 
+function normalizeFileName(name) {
+  return String(name || '').trim().toLowerCase()
+}
+
+function hasSameFileName(name) {
+  const normalized = normalizeFileName(name)
+  if (!normalized) return false
+  return form.files.some(item => normalizeFileName(item.name) === normalized)
+    || uploadingFileNames.has(normalized)
+}
+
+function addUploadIssue(name, reason) {
+  uploadIssueFiles.value.push({
+    name: name || '未命名文件',
+    reason,
+    time: Date.now() + Math.random(),
+  })
+}
+
+function clearUploadIssues() {
+  uploadIssueFiles.value = []
+}
+
 async function handleFileAdd(file) {
   if (!file?.raw) return
-  uploadingCount.value++
+  const fileName = file.name || file.raw.name || ''
+  const normalizedName = normalizeFileName(fileName)
+  if (hasSameFileName(fileName)) {
+    addUploadIssue(fileName, '文件名重复，已跳过')
+    ElMessage.warning(`「${fileName}」文件名重复，已跳过`)
+    return
+  }
+  uploadingFileNames.add(normalizedName)
+  uploadQueue.value.push({
+    raw: file.raw,
+    name: fileName,
+    normalizedName,
+    size: file.size || file.raw.size || 0,
+  })
+  processUploadQueue()
+}
+
+function processUploadQueue() {
+  while (uploadingCount.value < MAX_UPLOAD_CONCURRENCY && uploadQueue.value.length) {
+    const task = uploadQueue.value.shift()
+    uploadingCount.value++
+    void uploadSingleFile(task)
+  }
+}
+
+async function uploadSingleFile(task) {
+  const fileName = task.name
   filesError.value = ''
   try {
     const { upload } = useUpload()
-    const objectKey = await upload(file.raw, 'resource', { returnObjectKey: true })
-    const ext = (file.name || '').split('.').pop().toUpperCase()
+    const objectKey = await upload(task.raw, 'resource', { returnObjectKey: true })
+    const ext = (fileName || '').split('.').pop().toUpperCase()
     const type = EXT_TYPE_MAP[ext] || 'FILE'
-    const sizeKB = file.size ? (file.size / 1024) : 0
+    const sizeKB = task.size ? (task.size / 1024) : 0
     const sizeStr = sizeKB >= 1024 ? `${(sizeKB / 1024).toFixed(1)}MB` : `${sizeKB.toFixed(0)}KB`
-    form.files.push({ name: file.name, url: objectKey, type, size: sizeStr, isPreview: false, previewPages: 0 })
-    ElMessage.success(`「${file.name}」已上传`)
+    form.files.push({ name: fileName, url: objectKey, type, size: sizeStr, isPreview: false, previewPages: 0 })
+    ElMessage.success(`「${fileName}」已上传`)
   } catch (e) {
-    ElMessage.error(`「${file.name}」上传失败：${e?.message || '未知错误'}`)
+    const reason = e?.message || '未知错误'
+    addUploadIssue(fileName, reason)
+    ElMessage.error(`「${fileName}」上传失败：${reason}`)
   } finally {
+    uploadingFileNames.delete(task.normalizedName)
     uploadingCount.value--
+    processUploadQueue()
   }
 }
 </script>
@@ -768,5 +810,44 @@ async function handleFileAdd(file) {
   font-size: 12px;
   color: var(--el-text-color-placeholder);
   margin-top: 2px;
+}
+
+.upload-issues {
+  margin-top: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--el-color-warning-light-5);
+  border-radius: 6px;
+  background: var(--el-color-warning-light-9);
+}
+
+.upload-issues__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-color-warning-dark-2);
+}
+
+.upload-issues__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.upload-issues__name {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--el-text-color-primary);
+}
+
+.upload-issues__reason {
+  color: var(--el-text-color-secondary);
 }
 </style>

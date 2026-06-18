@@ -1,11 +1,12 @@
 <template>
   <div class="dp-search-form">
     <el-form label-width="88px" @submit.prevent="emitSearch" @keyup.enter="emitSearch">
-      <el-row :gutter="12">
-        <el-col
+      <div class="search-form-row">
+        <div
           v-for="item in schema"
           :key="`field-${item.prop}`"
-          :span="item.span || 6"
+          class="search-form-item"
+          :style="getItemStyle(item)"
         >
           <el-form-item :label="item.label">
             <template v-if="item.type === 'input'">
@@ -71,15 +72,15 @@
               />
             </template>
           </el-form-item>
-        </el-col>
+        </div>
 
-        <el-col :span="6" class="action-col">
+        <div class="action-col">
           <el-space>
             <el-button type="primary" @click="emitSearch">查询</el-button>
             <el-button @click="handleReset">重置</el-button>
           </el-space>
-        </el-col>
-      </el-row>
+        </div>
+      </div>
     </el-form>
   </div>
 </template>
@@ -121,6 +122,18 @@ function emitSearch() {
   emit('search')
 }
 
+function getItemStyle(item = {}) {
+  const explicitWidth = Number(item.width || 0)
+  const span = Number(item.span || 0)
+  let width = item.type === 'daterange' ? 360 : 280
+  if (span >= 8) width = 360
+  if (explicitWidth > 0) width = explicitWidth
+  return {
+    flex: `1 1 ${width}px`,
+    maxWidth: `${Math.max(width, 280)}px`,
+  }
+}
+
 function getResetValue(type) {
   if (type === 'switch') return false
   if (type === 'daterange') return []
@@ -145,10 +158,27 @@ function handleReset() {
   margin-bottom: 12px;
 }
 
+.search-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px 18px;
+}
+
+.search-form-item {
+  min-width: 260px;
+}
+
 .action-col {
   display: flex;
-  justify-content: flex-end;
+  flex: 0 0 auto;
+  justify-content: flex-start;
   align-items: flex-start;
+  padding-top: 1px;
+}
+
+.dp-search-form :deep(.el-form-item) {
+  margin-bottom: 0;
 }
 
 .dp-search-form :deep(.el-select),

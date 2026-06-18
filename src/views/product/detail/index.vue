@@ -50,9 +50,6 @@
             <el-form-item label="售价" prop="price">
               <PriceInput v-model="form.price" />
             </el-form-item>
-            <el-form-item label="原价" prop="original_price">
-              <PriceInput v-model="form.original_price" />
-            </el-form-item>
             <el-form-item label="库存" prop="stock">
               <el-input-number v-model="form.stock" :min="0" :max="999999" />
             </el-form-item>
@@ -103,7 +100,6 @@ const form = reactive({
   brief: '',
   description: '',
   price: 0,
-  original_price: 0,
   stock: 0,
   status: 1,
 })
@@ -129,7 +125,6 @@ async function load() {
       brief: data.brief || '',
       description: data.description,
       price: data.price,
-      original_price: data.original_price,
       stock: data.stock,
       status: data.status,
     })
